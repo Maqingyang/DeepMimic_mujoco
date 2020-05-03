@@ -22,7 +22,7 @@ from mpi_adam import MpiAdam
 from statistics import stats
 from mlp_policy_trpo import MlpPolicy
 
-from config import Config
+from config_modified import Config
 
 def traj_segment_generator(pi, env, mocap_player, horizon, stochastic):
     # Initialize state variables
@@ -439,7 +439,7 @@ def main(args):
     U.make_session(num_cpu=1).__enter__()
     set_global_seeds(args.seed)
     # from dp_env_v2 import DPEnv
-    from dp_env_v3 import DPEnv
+    from dp_env_v3_modified import DPEnv
     # from dp_env_test import DPEnv
     env = DPEnv()
     # env = gym.make('Humanoid-v2')

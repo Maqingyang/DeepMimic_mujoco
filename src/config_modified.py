@@ -7,7 +7,8 @@ class Config(object):
     curr_path = getcwd()
     # motion = 'spinkick'
     # motion = 'dance_b'
-    motion = 'walk'
+    # motion = 'walk'
+    motion = 'run'
     env_name = "dp_env_v3"
 
     motion_folder = '/mujoco/motions'

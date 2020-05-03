@@ -17,6 +17,12 @@ from pyquaternion import Quaternion
 
 from transformations import quaternion_from_euler
 
+
+import matplotlib.pyplot as plt
+
+
+
+
 BODY_JOINTS = ["chest", "neck", "right_shoulder", "right_elbow", 
             "left_shoulder", "left_elbow", "right_hip", "right_knee", 
             "right_ankle", "left_hip", "left_knee", "left_ankle"]
@@ -124,8 +130,8 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
         info = dict(reward_obs=reward_obs, reward_acs=reward_acs, reward_forward=reward_forward)
         '''
-        # reward = self.calc_config_reward()
-        reward = reward_alive
+        reward = self.calc_config_reward()
+        # reward = reward_alive
         info = dict()
         done = self.is_done()
 
@@ -197,6 +203,10 @@ if __name__ == "__main__":
         env.sim.step()
         env.calc_config_reward()
         print(env._get_obs())
-        env.render()
+        plt.figure(3)
+        plt.clf()
+        plt.imshow(env.render(mode="rgb_array"))
+        #plt.imsave("tmp.png",env.render(mode="rgb_array"))
+        #plt.waitforbuttonpress()
 
     # vid_save.close()

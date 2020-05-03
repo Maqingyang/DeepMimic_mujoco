@@ -12,10 +12,16 @@ from mujoco_py import load_model_from_xml, MjSim, MjViewer
 from gym.envs.mujoco import mujoco_env
 from gym import utils
 
-from config_modified import Config
+from config import Config
 from pyquaternion import Quaternion
 
-from transformations import quaternion_from_euler, euler_from_quaternion
+from transformations import quaternion_from_euler
+
+
+import matplotlib.pyplot as plt
+
+
+
 
 BODY_JOINTS = ["chest", "neck", "right_shoulder", "right_elbow", 
             "left_shoulder", "left_elbow", "right_hip", "right_knee", 
@@ -34,7 +40,6 @@ def mass_center(model, sim):
 class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     def __init__(self):
         xml_file_path = Config.xml_path
-        self.xml_file_path = xml_file_path
 
         self.mocap = MocapDM()
         self.interface = MujocoInterface()
@@ -60,16 +65,10 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 6)
         utils.EzPickle.__init__(self)
 
-    def _quat2euler(self, quat):
-        tmp_quat = np.array([quat[1], quat[2], quat[3], quat[0]])
-        euler = euler_from_quaternion(tmp_quat, axes='rxyz')
-        return euler
-
     def _get_obs(self):
-        config = self.sim.data.qpos.flat.copy()[2:] # ignore root joint: x, y
-        vel = self.sim.data.qvel.flat.copy() # ignore root joint
-
-        return np.concatenate((config, vel))
+        position = self.sim.data.qpos.flat.copy()[7:] # ignore root joint
+        velocity = self.sim.data.qvel.flat.copy()[6:] # ignore root joint
+        return np.concatenate((position, velocity))
 
     def reference_state_init(self):
         self.idx_init = random.randint(0, self.mocap_data_len-1)
@@ -78,20 +77,12 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.idx_tmp_count = 0
 
     def early_termination(self):
-        target_config = self.mocap.data_config[self.idx_curr][7:] # to exclude root joint
-        curr_config = self.get_joint_configs()
-        err_configs = self.calc_config_errs(curr_config, target_config)
-        if err_configs >= 15.0:
-            return True
-        return False
+        pass
 
     def get_joint_configs(self):
         data = self.sim.data
-        return data.qpos[7:] # to exclude root joint
-
-    def get_root_configs(self):
-        data = self.sim.data
-        return data.qpos[3:7] # to exclude x coord
+        # return data.qpos[7:] # to exclude root joint
+        return data.qpos[:] # include all
 
     def load_mocap(self, filepath):
         self.mocap.load_mocap(filepath)
@@ -102,27 +93,12 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         assert len(env_config) == len(mocap_config)
         return np.sum(np.abs(env_config - mocap_config))
 
-    def calc_root_reward(self): # including root joint
-        curr_root = self.mocap.data_config[self.idx_curr][3:7]
-        target_root = self.get_root_configs()
-        assert len(curr_root) == len(target_root)
-        assert len(curr_root) == 4
-
-        q_0 = Quaternion(curr_root[0], curr_root[1], curr_root[2], curr_root[3])
-        q_1 = Quaternion(target_root[0], target_root[1], target_root[2], target_root[3])
-
-        q_diff =  q_0.conjugate * q_1
-        tmp_diff = q_diff.angle
-
-        err_root = abs(tmp_diff)
-        reward_root = math.exp(-err_root)
-        return reward_root
-
     def calc_config_reward(self):
         assert len(self.mocap.data) != 0
         err_configs = 0.0
 
-        target_config = self.mocap.data_config[self.idx_curr][7:] # to exclude root joint
+        # target_config = self.mocap.data_config[self.idx_curr][7:] # to exclude root joint
+        target_config = self.mocap.data_config[self.idx_curr][:] # include all
         self.curr_frame = target_config
         curr_config = self.get_joint_configs()
 
@@ -130,25 +106,36 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         # reward_config = math.exp(-self.scale_err * self.scale_pose * err_configs)
         reward_config = math.exp(-err_configs)
 
-        return reward_config, err_configs
-
-    def step(self, action):
-        self.step_len = 1
-        step_times = 1
-
-        self.do_simulation(action, step_times)
-
-        reward_config,  err_config = self.calc_config_reward()
-        reward_root = 10 * self.calc_root_reward()
-        reward = reward_config + reward_root
-
-        info = dict()
-
         self.idx_curr += 1
         self.idx_curr = self.idx_curr % self.mocap_data_len
 
+        return reward_config
+
+    def step(self, action):
+        # self.step_len = int(self.mocap_dt // self.model.opt.timestep)
+        self.step_len = 1
+        # step_times = int(self.mocap_dt // self.model.opt.timestep)
+        step_times = 1
+        # pos_before = mass_center(self.model, self.sim)
+        self.do_simulation(action, step_times)
+        # pos_after = mass_center(self.model, self.sim)
+
         observation = self._get_obs()
-        done = bool(self.is_done() or err_config >= 10.0)
+
+        reward_alive = 1.0
+        '''
+        reward_obs = self.calc_config_reward()
+        reward_acs = np.square(data.ctrl).sum()
+        reward_forward = 0.25*(pos_after - pos_before)
+
+        reward = reward_obs - 0.1 * reward_acs + reward_forward + reward_alive
+
+        info = dict(reward_obs=reward_obs, reward_acs=reward_acs, reward_forward=reward_forward)
+        '''
+        reward = 10*self.calc_config_reward()
+        # reward = reward_alive
+        info = dict()
+        done = self.is_done()
 
         return observation, reward, done, info
 
@@ -156,9 +143,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         mass = np.expand_dims(self.model.body_mass, 1)
         xpos = self.sim.data.xipos
         z_com = (np.sum(mass * xpos, 0) / np.sum(mass))[2]
-        # done = bool((z_com < 0.7) or (z_com > 1.2) or self.early_termination())
-        done = bool((z_com < 0.7) or (z_com > 1.2))
-        # return False
+        done = bool((z_com < 0.7) or (z_com > 2.0))
         return done
 
     def goto(self, pos):
@@ -182,7 +167,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         c = 0.01
         self.set_state(
             self.init_qpos + self.np_random.uniform(low=-c, high=c, size=self.model.nq),
-            self.init_qvel + self.np_random.uniform(low=-c, high=c, size=self.model.nv)
+            self.init_qvel + self.np_random.uniform(low=-c, high=c, size=self.model.nv,)
         )
         return self._get_obs()
 
@@ -208,23 +193,22 @@ if __name__ == "__main__":
     action_size = env.action_space.shape[0]
     ac = np.zeros(action_size)
     while True:
-        # target_config = env.mocap.data_config[env.idx_curr][:7] # to exclude root joint
-        # env.sim.data.qpos[:7] = target_config[:]
+        # target_config = env.mocap.data_config[env.idx_curr][7:] # to exclude root joint
+        # env.sim.data.qpos[7:] = target_config[:]
         # env.sim.forward()
 
         qpos = env.mocap.data_config[env.idx_curr]
-        qvel = np.zeros_like(env.mocap.data_vel[env.idx_curr])
+        qvel = env.mocap.data_vel[env.idx_curr]
         # qpos = np.zeros_like(env.mocap.data_config[env.idx_curr])
         # qvel = np.zeros_like(env.mocap.data_vel[env.idx_curr])
         env.set_state(qpos, qvel)
         env.sim.step()
-        print("Reward root:", env.calc_config_reward())
-        env.idx_curr += 1
-        if env.idx_curr == env.mocap_data_len:
-            # env.reset_model()
-            env.idx_curr = env.idx_curr % env.mocap_data_len
-
-        # print(env._get_obs())
-        env.render()
+        env.calc_config_reward()
+        print(env._get_obs())
+        plt.figure(3)
+        plt.clf()
+        plt.imshow(env.render(mode="rgb_array"))
+        #plt.imsave("tmp.png",env.render(mode="rgb_array"))
+        #plt.waitforbuttonpress()
 
     # vid_save.close()

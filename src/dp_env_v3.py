@@ -191,22 +191,23 @@ if __name__ == "__main__":
     action_size = env.action_space.shape[0]
     ac = np.zeros(action_size)
     while True:
-        # target_config = env.mocap.data_config[env.idx_curr][7:] # to exclude root joint
-        # env.sim.data.qpos[7:] = target_config[:]
+        # target_config = env.mocap.data_config[env.idx_curr][:7] # to exclude root joint
+        # env.sim.data.qpos[:7] = target_config[:]
         # env.sim.forward()
 
         qpos = env.mocap.data_config[env.idx_curr]
-        qvel = env.mocap.data_vel[env.idx_curr]
+        qvel = np.zeros_like(env.mocap.data_vel[env.idx_curr])
         # qpos = np.zeros_like(env.mocap.data_config[env.idx_curr])
         # qvel = np.zeros_like(env.mocap.data_vel[env.idx_curr])
         env.set_state(qpos, qvel)
         env.sim.step()
-        env.calc_config_reward()
-        print(env._get_obs())
-        plt.figure(3)
-        plt.clf()
-        plt.imshow(env.render(mode="rgb_array"))
-        #plt.imsave("tmp.png",env.render(mode="rgb_array"))
-        #plt.waitforbuttonpress()
+        print("Reward root:", env.calc_config_reward())
+        env.idx_curr += 1
+        if env.idx_curr == env.mocap_data_len:
+            # env.reset_model()
+            env.idx_curr = env.idx_curr % env.mocap_data_len
+
+        # print(env._get_obs())
+        env.render()
 
     # vid_save.close()

@@ -436,7 +436,7 @@ def traj_1_generator(pi, env, horizon, stochastic):
     return traj
 
 def main(args):
-    U.make_session(num_cpu=1).__enter__()
+    U.make_session(num_cpu=48).__enter__()
     set_global_seeds(args.seed)
     # from dp_env_v2 import DPEnv
     from dp_env_v3_modified import DPEnv
@@ -519,6 +519,6 @@ def argsparser():
 if __name__ == "__main__":
     import os
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID" 
-    os.environ["CUDA_VISIBLE_DEVICES"]="8"
+    os.environ["CUDA_VISIBLE_DEVICES"]="8,9"
     args = argsparser()
     main(args)

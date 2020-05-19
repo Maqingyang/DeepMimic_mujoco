@@ -5,6 +5,8 @@ import math
 import copy
 import numpy as np
 from os import getcwd
+import sys
+sys.path.append("")
 from pyquaternion import Quaternion
 from mujoco.mocap_util import align_position, align_rotation
 from mujoco.mocap_util import BODY_JOINTS, BODY_JOINTS_IN_DP_ORDER, DOF_DEF, BODY_DEFS

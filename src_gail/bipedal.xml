@@ -1,0 +1,83 @@
+<mujoco model="bipedal">
+  <compiler angle="radian" coordinate="global" inertiafromgeom="true"/>
+  <default>
+    <joint armature="0.01" damping=".1" limited="true"/>
+    <geom conaffinity="1" condim="1" contype="1" margin="0.001" density="1000" friction=".7 .1 .1" rgba="0.8 0.6 .4 1"/>
+  </default>
+  <option integrator="RK4" timestep="0.002"/>
+  <worldbody>
+    <light cutoff="100" diffuse="1 1 1" dir="-0 0 -1.3" directional="true" exponent="1" pos="0 0 1.3" specular=".1 .1 .1"/>
+    <geom conaffinity="1" condim="3" name="floor" pos="0 0 0" rgba="0.8 0.9 0.8 1" size="40 40 40" type="plane" material="MatPlane"/>
+    <body name="root">
+      <camera name="track" mode="trackcom" pos="2 -3 1" xyaxes="1 .6 0 0 0 1"/>
+      <geom friction="0.9" name="torso_geom" mass="25" pos="0 0 0.9829" size="0.055 0.139 0.225" rgba="0.4706 0.549 0.6863 1" type="box"/>
+      <joint armature="0" axis="1 0 0" damping="0" limited="false" name="rootx" pos="0 0 0" stiffness="0" type="slide"/>
+      <joint armature="0" axis="0 0 1" damping="0" limited="false" name="rootz" pos="0 0 0" ref="1.25" stiffness="0" type="slide"/>
+      <joint armature="0" axis="0 1 0" damping="0" limited="false" name="rooty" pos="0 0 0.7929" stiffness="0" type="hinge"/>
+      <body name="right_hip">
+        <geom friction="0.9" name="right_hip_geom" mass="3" pos="0 -0.1 0.6184" size="0.0423 0.04 0.2" rgba="0.6392 0.6941 0.7372 1" type="box"/>
+        <joint axis="0 -1 0" name="right_hip_joint" pos="0 -0.1 0.7929" range="-1.2 2.57" type="hinge"/>
+        <body name="right_knee">
+          <geom friction="0.9" name="right_knee_geom"  mass="2" pos="0 -0.1 0.2579" size="0.0325 0.03 0.208" rgba="0.6392 0.6941 0.7372 1" type="box"/>
+          <joint axis="0 -1 0" name="right_knee_joint" pos="0 -0.1 0.4409" range="-3.14 0" type="hinge"/>
+          <body name="right_ankle">
+          <geom friction="0.9" name="right_ankle_geom" mass="1" pos="0.0518 -0.1 0.0275" size="0.0885 0.045 0.0275" rgba="0.6392 0.6941 0.7372 1" type="box"/>
+            <joint axis="0 -1 0" name="right_ankle_joint" pos="0 -0.1 0.0499" range="-1.57 1.57" type="hinge"/>
+          </body>
+        </body>
+      </body>
+      <!-- create the left part -->
+      <body name="left_hip">
+        <geom friction="0.9" name="left_hip_geom" mass="3" pos="0 0.1 0.6184" size="0.0423 0.04 0.2" rgba="0.6392 0.6941 0.7372 1" type="box"/>
+        <joint axis="0 -1 0" name="left_hip_joint" pos="0 -0.1 0.7929" range="-1.2 2.57" type="hinge"/>
+        <body name="left_knee">
+          <geom friction="0.9" name="left_knee_geom" mass="2" pos="0 0.1 0.2579" size="0.0325 0.03 0.208" rgba="0.6392 0.6941 0.7372 1" type="box"/>
+          <joint axis="0 -1 0" name="left_knee_joint" pos="0 -0.1 0.4409" range="-3.14 0" type="hinge"/>
+          <body name="left_ankle">
+          <geom friction="0.9" name="left_ankle_geom" mass="1" pos="0.0518 0.1 0.0275" size="0.0885 0.045 0.0275" rgba="0.6392 0.6941 0.7372 1" type="box"/>
+            <joint axis="0 -1 0" name="left_ankle_joint" pos="0 -0.1 0.0499" range="-1.57 1.57" type="hinge"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <!-- <motor joint="torso_joint" ctrlrange="-100.0 100.0" isctrllimited="true"/>-->
+  	<general gaintype="user" biastype="user" forcerange="-150 150" gainprm="300 10 0.1 0.1 0.1 0" joint="right_hip_joint"/>
+  	<general gaintype="user" biastype="user" forcerange="-100 100" gainprm="200 10 0.1 0.1 0.1 0" joint="right_knee_joint"/>
+  	<general gaintype="user" biastype="user" forcerange="-50 50" gainprm="50 10 0.1 0.1 0.1 0" joint="right_ankle_joint"/>
+  	<general gaintype="user" biastype="user" forcerange="-150 150" gainprm="300 10 0.1 0.1 0.1 0" joint="left_hip_joint"/>
+  	<general gaintype="user" biastype="user" forcerange="-100 100" gainprm="200 10 0.1 0.1 0.1 0" joint="left_knee_joint"/>
+  	<general gaintype="user" biastype="user" forcerange="-50 50" gainprm="50 10 0.1 0.1 0.1 0" joint="left_ankle_joint"/>
+    <!-- <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="150" joint="right_hip_joint"/>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="100" joint="right_knee_joint"/>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="50" joint="right_ankle_joint"/>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="150" joint="left_hip_joint"/>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="100" joint="left_knee_joint"/>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="50" joint="left_ankle_joint"/> -->
+    <!-- <motor joint="finger2_rot" ctrlrange="-20.0 20.0" isctrllimited="true"/>-->
+  </actuator>
+    <asset>
+        <texture type="skybox" builtin="gradient" rgb1="1 1 1 " rgb2=".97 .97 1"
+            width="100" height="100"/>
+        <texture builtin="flat" height="1278" mark="cross" markrgb="1 1 1" name="texgeom" random="0.01" rgb1="0.8 0.6 0.4" rgb2="0.8 0.6 0.4" type="cube" width="127"/>
+        <texture file="/home/maze/project/DeepMimic_mujoco/src_gail/sponge.png" name="texplane"  type="2d"/>
+        <material name="MatPlane" texrepeat="60 60" texture="texplane"/>
+        <material name="geom" texture="texgeom" texuniform="true"/>
+    </asset>
+</mujoco>
+<!-- """
+  Kp == Kp
+  Ki == Kp/Ti
+  Kd == Kp*Td
+
+  In this situation, Kp is a knob to tune the agressiveness, wheras Ti and Td will
+  change the response time of the system in a predictable way. Lower Ti or Td means
+  that the system will respond to error more quickly/agressively.
+
+  error deadband: if set will shrink error within to 0.0
+  clamp on integral term:  helps on saturation problem in I.
+  derivative smoothing term:  reduces high frequency noise in D.
+
+  set in gainprm="Kp Ti Td iClamp errBand iSmooth" in mujoco xml.
+""" -->

@@ -194,6 +194,7 @@ if __name__ == "__main__":
         env.sim.step()
         env.calc_config_reward()
         print(env._get_obs())
-        env.render()
+        img = env.render(mode = 'rgb_array')[...,::-1]
+        cv2.imwrite("env.png",img)
 
     # vid_save.close()

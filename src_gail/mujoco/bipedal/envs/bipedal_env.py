@@ -3,7 +3,8 @@ import numpy as np
 import math
 import random
 from os import getcwd
-
+import sys
+sys.path.append(getcwd())
 from mujoco.mocap_v2 import MocapDM
 from mujoco.mujoco_interface import MujocoInterface
 from mujoco.mocap_util import JOINT_WEIGHT

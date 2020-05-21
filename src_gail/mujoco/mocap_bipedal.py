@@ -6,10 +6,10 @@ import copy
 import numpy as np
 from os import getcwd
 import sys
-sys.path.append(r"C:\Users\maze1\OneDrive\Motion Prior\DeepMimic_mujoco\src_gail")
+sys.path.append(getcwd())
 from pyquaternion import Quaternion
 from mujoco.mocap_util import align_position, align_rotation
-from mujoco.mocap_util import BODY_JOINTS, BODY_JOINTS_IN_DP_ORDER, DOF_DEF, BODY_DEFS
+from mujoco.mocap_util import BIPEDAL_JOINTS_ORDER, BIPEDAL_JOINTS_DOF, BODY_DEFS
 
 from transformations import euler_from_quaternion, quaternion_from_euler
 
@@ -49,9 +49,9 @@ class MocapDM(object):
                 state['root_pos'] = align_position(each_frame[curr_idx:curr_idx+3])
                 # state['root_pos'][2] += 0.08
                 state['root_rot'] = align_rotation(each_frame[curr_idx+3:offset_idx])
-                for each_joint in BODY_JOINTS_IN_DP_ORDER:
+                for each_joint in BIPEDAL_JOINTS_ORDER:
                     curr_idx = offset_idx
-                    dof = DOF_DEF[each_joint]
+                    dof = BIPEDAL_JOINTS_DOF[each_joint]
                     if dof == 1:
                         offset_idx += 1
                         state[each_joint] = each_frame[curr_idx:offset_idx]
@@ -115,10 +115,10 @@ class MocapDM(object):
                 tmp_vel += self.calc_rot_vel(self.data[k, init_idx:offset_idx], self.data[k-1, init_idx:offset_idx], dura)
             tmp_angle += state['root_rot'].tolist()
 
-            for each_joint in BODY_JOINTS:
+            for each_joint in BIPEDAL_JOINTS_ORDER:
                 init_idx = offset_idx
                 tmp_val = state[each_joint]
-                if DOF_DEF[each_joint] == 1:
+                if BIPEDAL_JOINTS_DOF[each_joint] == 1:
                     assert 1 == len(tmp_val)
                     offset_idx += 1
                     self.data[k, init_idx:offset_idx] = state[each_joint]
@@ -127,7 +127,7 @@ class MocapDM(object):
                     else:
                         tmp_vel += ((self.data[k, init_idx:offset_idx] - self.data[k-1, init_idx:offset_idx])*1.0/dura).tolist()
                     tmp_angle += state[each_joint].tolist()
-                elif DOF_DEF[each_joint] == 3:
+                elif BIPEDAL_JOINTS_DOF[each_joint] == 3:
                     assert 4 == len(tmp_val)
                     offset_idx += 4
                     self.data[k, init_idx:offset_idx] = state[each_joint]
@@ -154,7 +154,7 @@ class MocapDM(object):
         from mujoco_py import load_model_from_xml, MjSim, MjViewer
 
         curr_path = getcwd()
-        xmlpath = '/mujoco/humanoid_deepmimic/envs/asset/dp_env_v2.xml'
+        xmlpath = '/mujoco/bipedal/envs/asset/bipedal.xml'
         with open(curr_path + xmlpath) as fin:
             MODEL_XML = fin.read()
 

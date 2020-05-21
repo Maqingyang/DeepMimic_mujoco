@@ -28,6 +28,11 @@ JOINT_WEIGHT = {"root": 1, "chest": 0.5, "neck": 0.3, "right_hip": 0.5,
                 "right_wrist": 0.0, "left_hip": 0.5, "left_knee": 0.3, "left_ankle": 0.2, 
                 "left_shoulder": 0.3, "left_elbow": 0.2, "left_wrist": 0.0}
 
+BIPEDAL_JOINTS_ORDER = ["right_hip", "right_knee","right_ankle", 
+                            "left_hip", "left_knee", "left_ankle"]
+BIPEDAL_JOINTS_DOF = { "right_hip": 1, "right_knee": 1, "right_ankle": 1, 
+                        "left_hip": 1, "left_knee": 1, "left_ankle": 1}
+                        
 def align_rotation(rot):
     q_input = Quaternion(rot[0], rot[1], rot[2], rot[3])
     q_align_right = Quaternion(matrix=np.array([[1.0, 0.0, 0.0], 

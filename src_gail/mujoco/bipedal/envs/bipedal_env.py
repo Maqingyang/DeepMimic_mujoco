@@ -20,7 +20,7 @@ from transformations import quaternion_from_euler
 
 class BipedalEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     def __init__(self):
-        mujoco_env.MujocoEnv.__init__(self, "/home/maze/project/DeepMimic_mujoco/src_gail/bipedal.xml", 1)
+        mujoco_env.MujocoEnv.__init__(self, "/home/maze/project/DeepMimic_mujoco/src_gail/mujoco/bipedal/envs/asset/bipedal.xml", 1)
         utils.EzPickle.__init__(self)
 
     def reset_model(self):

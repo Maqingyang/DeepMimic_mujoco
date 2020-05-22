@@ -4,8 +4,9 @@ import json
 import math
 import copy
 import numpy as np
-from os import getcwd
+from os import getcwd,chdir
 import sys
+chdir("/home/maze/project/DeepMimic_mujoco/src_gail")
 sys.path.append(getcwd())
 from pyquaternion import Quaternion
 from mujoco.mocap_util import align_position, align_rotation
@@ -51,7 +52,7 @@ class MocapDM(object):
                 state['root_rot'] = align_rotation(each_frame[curr_idx+3:offset_idx])
                 torso_pos = root_pos + Quaternion(state['root_rot']).rotate(np.array([0,0,0.19]))
                 state['root_pos'] = torso_pos
-                
+
                 for each_joint in BIPEDAL_JOINTS_ORDER:
                     curr_idx = offset_idx
                     dof = BIPEDAL_JOINTS_DOF[each_joint]
@@ -181,9 +182,12 @@ class MocapDM(object):
                 sim.set_state(sim_state)
                 sim.forward()
                 # viewer.render()
+                print(sim_state.qpos)
 
             sim_state = sim.get_state()
-            phase_offset = sim_state.qpos[:3]
+            # phase_offset = sim_state.qpos[:3]
+            phase_offset = np.array([0.0, 0.0, 0.0])
+
             phase_offset[2] = 0
 
 if __name__ == "__main__":

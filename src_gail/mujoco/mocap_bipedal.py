@@ -46,9 +46,12 @@ class MocapDM(object):
                 curr_idx = 1
                 offset_idx = 8
                 state = {}
-                state['root_pos'] = align_position(each_frame[curr_idx:curr_idx+3])
+                root_pos = align_position(each_frame[curr_idx:curr_idx+3])
                 # state['root_pos'][2] += 0.08
                 state['root_rot'] = align_rotation(each_frame[curr_idx+3:offset_idx])
+                torso_pos = root_pos + Quaternion(state['root_rot']).rotate(np.array([0,0,0.19]))
+                state['root_pos'] = torso_pos
+                
                 for each_joint in BIPEDAL_JOINTS_ORDER:
                     curr_idx = offset_idx
                     dof = BIPEDAL_JOINTS_DOF[each_joint]

@@ -12,7 +12,7 @@
     <body name="root">
       <camera name="track" mode="trackcom" pos="2 -3 1" xyaxes="1 .6 0 0 0 1"/>
       <geom friction="0.9" name="torso_geom" mass="25" pos="0 0 0.9829" size="0.055 0.139 0.225" rgba="0.4706 0.549 0.6863 1" type="box"/>
-      <joint armature="0" damping="0" limited="false" name="root" pos="0 0 0.7929" stiffness="0" type="free"/>
+      <joint armature="0" damping="0" limited="false" name="root" pos="0 0 0.9829" stiffness="0" type="free"/>
       <!-- <joint armature="0" axis="1 0 0" damping="0" limited="false" name="rootx" pos="0 0 0" stiffness="0" type="slide"/>
       <joint armature="0" axis="0 0 1" damping="0" limited="false" name="rootz" pos="0 0 0" ref="1.25" stiffness="0" type="slide"/>
       <joint armature="0" axis="0 1 0" damping="0" limited="false" name="rooty" pos="0 0 0.7929" stiffness="0" type="hinge"/> -->

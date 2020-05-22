@@ -14,7 +14,7 @@
       <geom friction="0.9" name="torso_geom" mass="25" pos="0 0 0.9829" size="0.055 0.139 0.225" rgba="0.4706 0.549 0.6863 1" type="box"/>
       <!-- <joint armature="0" damping="0" limited="false" name="root" pos="0 0 0.9829" stiffness="0" type="free"/> -->
       <joint armature="0" axis="1 0 0" damping="0" limited="false" name="rootx" pos="0 0 0" stiffness="0" type="slide"/>
-      <joint armature="0" axis="0 0 1" damping="0" limited="false" name="rootz" pos="0 0 1" ref="0.9829" stiffness="0" type="slide"/>
+      <joint armature="0" axis="0 0 1" damping="0" limited="false" name="rootz" pos="0 0 0" ref="0.9829" stiffness="0" type="slide"/>
       <joint armature="0" axis="0 1 0" damping="0" limited="false" name="rooty" pos="0 0 0.9829" stiffness="0" type="hinge"/>
       <body name="right_hip">
         <geom friction="0.9" name="right_hip_geom" mass="3" pos="0 -0.1 0.6184" size="0.0423 0.04 0.2" rgba="0.6392 0.6941 0.7372 1" type="box"/>

@@ -160,7 +160,7 @@ class MocapDM(object):
 
         model = load_model_from_xml(MODEL_XML)
         sim = MjSim(model)
-        viewer = MjViewer(sim)
+        # viewer = MjViewer(sim)
 
         self.read_raw_data(mocap_filepath)
         self.convert_raw_data()
@@ -177,7 +177,7 @@ class MocapDM(object):
                 sim_state.qpos[:3] +=  phase_offset[:]
                 sim.set_state(sim_state)
                 sim.forward()
-                viewer.render()
+                # viewer.render()
 
             sim_state = sim.get_state()
             phase_offset = sim_state.qpos[:3]

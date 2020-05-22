@@ -58,15 +58,24 @@
     <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="50" joint="left_ankle_joint"/> -->
     <!-- <motor joint="finger2_rot" ctrlrange="-20.0 20.0" isctrllimited="true"/>-->
   </actuator>
-    <asset>
+    <!-- <asset>
         <texture type="skybox" builtin="gradient" rgb1="1 1 1 " rgb2=".97 .97 1"
             width="100" height="100"/>
         <texture builtin="flat" height="1278" mark="cross" markrgb="1 1 1" name="texgeom" random="0.01" rgb1="0.8 0.6 0.4" rgb2="0.8 0.6 0.4" type="cube" width="127"/>
         <texture file="/home/maze/project/DeepMimic_mujoco/src_gail/mujoco/bipedal/envs/asset/sponge.png" name="texplane"  type="2d"/>
         <material name="MatPlane" texrepeat="60 60" texture="texplane"/>
         <material name="geom" texture="texgeom" texuniform="true"/>
+    </asset> -->
+    <asset>
+        <texture builtin="gradient" height="100" rgb1=".4 .5 .6" rgb2="0 0 0" type="skybox" width="100"/>
+        <texture builtin="flat" height="1278" mark="cross" markrgb="1 1 1" name="texgeom" random="0.01" rgb1="0.8 0.6 0.4" rgb2="0.8 0.6 0.4" type="cube" width="127"/>
+        <texture name="grid" type="2d" builtin="checker" rgb1=".1 .2 .3" rgb2=".2 .3 .4" width="300" height="300" mark="edge" markrgb=".2 .3 .4"/>
+        <material name="MatPlane" reflectance="0.2" texrepeat="1 1" texuniform="true" texture="grid"/>
+        <material name="geom" texture="texgeom" texuniform="true"/>
     </asset>
 </mujoco>
+
+
 <!-- """
   Kp == Kp
   Ki == Kp/Ti

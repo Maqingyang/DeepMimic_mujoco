@@ -51,6 +51,8 @@ class MocapDM(object):
                 # state['root_pos'][2] += 0.08
                 root_quaternion = align_rotation(each_frame[curr_idx+3:offset_idx])
                 state['root_rot'] = np.array(euler_from_quaternion(root_quaternion, axes='rxyz')[0:1]) # (rot_around_y)
+                if state['root_rot'] < 0:
+                    state['root_rot'] += np.pi
                 torso_pos = root_pos + Quaternion(root_quaternion).rotate(np.array([0,0,0.19]))
                 state['root_pos'] = torso_pos[[0,2]] # (root_x,root_z)
 

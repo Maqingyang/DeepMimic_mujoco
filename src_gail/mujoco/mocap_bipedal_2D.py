@@ -6,7 +6,6 @@ import copy
 import numpy as np
 from os import getcwd,chdir
 import sys
-chdir("/home/maze/project/DeepMimic_mujoco/src_gail")
 sys.path.append(getcwd())
 from pyquaternion import Quaternion
 from mujoco.mocap_util import align_position, align_rotation
@@ -50,9 +49,7 @@ class MocapDM(object):
                 root_pos = align_position(each_frame[curr_idx:curr_idx+3])
                 # state['root_pos'][2] += 0.08
                 root_quaternion = align_rotation(each_frame[curr_idx+3:offset_idx])
-                state['root_rot'] = np.array(euler_from_quaternion(root_quaternion, axes='rxyz')[0:1]) # (rot_around_y)
-                if state['root_rot'] < 0:
-                    state['root_rot'] += np.pi
+                state['root_rot'] = np.array(euler_from_quaternion(root_quaternion, axes='rxyz')[1:2]) # (rot_around_y)
                 torso_pos = root_pos + Quaternion(root_quaternion).rotate(np.array([0,0,0.19]))
                 state['root_pos'] = torso_pos[[0,2]] # (root_x,root_z)
 
@@ -169,7 +166,7 @@ class MocapDM(object):
 
         model = load_model_from_xml(MODEL_XML)
         sim = MjSim(model)
-        # viewer = MjViewer(sim)
+        viewer = MjViewer(sim)
 
         self.read_raw_data(mocap_filepath)
         self.convert_raw_data()
@@ -186,7 +183,7 @@ class MocapDM(object):
                 # sim_state.qpos[:3] +=  phase_offset[:]
                 sim.set_state(sim_state)
                 sim.forward()
-                # viewer.render()
+                viewer.render()
                 print(sim_state.qpos)
 
             sim_state = sim.get_state()

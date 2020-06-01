@@ -52,7 +52,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.idx_tmp_count = -1
 
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
-        self.viewer = MjViewer(self.sim)
+        # self.viewer = MjViewer(self.sim)
         utils.EzPickle.__init__(self)
 
     def _get_obs(self):
@@ -151,7 +151,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return self.sim.data.time
 
     def reset_model(self):
-        env.sim.reset()
+        self.sim.reset()
         self.reference_state_init()
         qpos = self.mocap.data_config[self.idx_init]
         qvel = self.mocap.data_vel[self.idx_init]

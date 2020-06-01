@@ -52,6 +52,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.idx_tmp_count = -1
 
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
+        self.viewer = MjViewer(self.sim)
         utils.EzPickle.__init__(self)
 
     def _get_obs(self):
@@ -102,8 +103,12 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.idx_curr = int(curr_time // self.mocap_dt)  
         ratio = 1 - (curr_time % self.mocap_dt) / self.mocap_dt
         idx_next = (self.idx_curr + 1) % self.mocap_data_len
+        config_next = self.mocap.data_config[idx_next]
 
-        target_config = lerp(self.mocap.data_config[self.idx_curr],self.mocap.data_config[idx_next],ratio)
+        if idx_next == 0:
+            config_next[:2] += self.mocap.data_config[self.idx_curr][:2]
+    
+        target_config = lerp(self.mocap.data_config[self.idx_curr],config_next,ratio)
         target_vel = lerp(self.mocap.data_vel[self.idx_curr],self.mocap.data_vel[idx_next],ratio)
 
         self.target_config = target_config
@@ -191,16 +196,18 @@ if __name__ == "__main__":
         # env.sim.data.qpos[7:] = target_config[:]
         # env.sim.forward()
 
-        qpos = env.mocap.data_config[env.idx_curr]
-        qvel = env.mocap.data_vel[env.idx_curr]
+        # qpos = env.mocap.data_config[env.idx_curr]
+        # qvel = env.mocap.data_vel[env.idx_curr]
         # qpos = np.zeros_like(env.mocap.data_config[env.idx_curr])
         # qvel = np.zeros_like(env.mocap.data_vel[env.idx_curr])
-        env.set_state(qpos, qvel)
+        # env.set_state(qpos, qvel)
         # env.sim.step()
-        env.step(env.action_space.sample())
-
+        observation, reward, done, info = env.step(env.action_space.sample())
+        env.goto(env.target_config)
+        env.viewer.render()
+        if done:
+            env.reset_model()
         # env.calc_config_reward()
-        print(env._get_obs())
         # img = env.render(mode = 'rgb_array')[...,::-1]
         # cv2.imwrite("env.png",img)
     # vid_save.close()

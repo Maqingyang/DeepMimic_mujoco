@@ -80,7 +80,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.mocap.load_mocap(filepath)
         self.mocap_dt = self.mocap.dt
         self.mocap_data_len = len(self.mocap.data)
-        self.mocap_period = self.mocap_data_len*self.mocap_dt
+        self.mocap_period = (self.mocap_data_len-1)*self.mocap_dt # the last is the same as the first
 
     def calc_config_errs(self, env_config, mocap_config):
         assert len(env_config) == len(mocap_config)
@@ -100,16 +100,15 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def update_target_frame(self):
         curr_time = (self.data.time + self.idx_init*self.mocap_dt) % self.mocap_period
+        curr_periord = (self.data.time + self.idx_init*self.mocap_dt) // self.mocap_period
+        root_shift = curr_periord*self.mocap.data_config[self.mocap_data_len-1][:1]
+
         self.idx_curr = int(curr_time // self.mocap_dt)  
         ratio = 1 - (curr_time % self.mocap_dt) / self.mocap_dt
-        idx_next = (self.idx_curr + 1) % self.mocap_data_len
-        config_next = self.mocap.data_config[idx_next]
-
-        if idx_next == 0:
-            config_next[:2] += self.mocap.data_config[self.idx_curr][:2]
     
-        target_config = lerp(self.mocap.data_config[self.idx_curr],config_next,ratio)
-        target_vel = lerp(self.mocap.data_vel[self.idx_curr],self.mocap.data_vel[idx_next],ratio)
+        target_config = lerp(self.mocap.data_config[self.idx_curr],self.mocap.data_config[self.idx_curr + 1],ratio)
+        target_config[:1] += root_shift[:1]
+        target_vel = lerp(self.mocap.data_vel[self.idx_curr],self.mocap.data_vel[self.idx_curr + 1],ratio)
 
         self.target_config = target_config
         self.target_vel = target_vel
@@ -141,7 +140,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         mass = np.expand_dims(self.model.body_mass, 1)
         xpos = self.sim.data.xipos
         z_com = (np.sum(mass * xpos, 0) / np.sum(mass))[2] # bipedal mass center at 0.7937
-        done = bool((z_com < 0.4) or (z_com > 1.2))
+        done = bool((z_com < 0.4) or (z_com > 1.5))
         return done
 
     def goto(self, pos):
@@ -205,8 +204,8 @@ if __name__ == "__main__":
         observation, reward, done, info = env.step(env.action_space.sample())
         env.goto(env.target_config)
         env.viewer.render()
-        if done:
-            env.reset_model()
+        # if done:
+        #     env.reset_model()
         # env.calc_config_reward()
         # img = env.render(mode = 'rgb_array')[...,::-1]
         # cv2.imwrite("env.png",img)

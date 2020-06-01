@@ -44,27 +44,14 @@
     </body>
   </worldbody>
   <actuator>
-    <!-- <motor joint="torso_joint" ctrlrange="-100.0 100.0" isctrllimited="true"/>-->
-  	<!-- <general gaintype="user" biastype="user" forcerange="-150 150" gainprm="300 10 0.1 0.1 0.1 0" joint="right_hip_joint"/>
-  	<general gaintype="user" biastype="user" forcerange="-100 100" gainprm="200 10 0.1 0.1 0.1 0" joint="right_knee_joint"/>
-  	<general gaintype="user" biastype="user" forcerange="-50 50" gainprm="50 10 0.1 0.1 0.1 0" joint="right_ankle_joint"/>
-  	<general gaintype="user" biastype="user" forcerange="-150 150" gainprm="300 10 0.1 0.1 0.1 0" joint="left_hip_joint"/>
-  	<general gaintype="user" biastype="user" forcerange="-100 100" gainprm="200 10 0.1 0.1 0.1 0" joint="left_knee_joint"/>
-  	<general gaintype="user" biastype="user" forcerange="-50 50" gainprm="50 10 0.1 0.1 0.1 0" joint="left_ankle_joint"/> -->
 
-  	<general gaintype="user" biastype="user" forcerange="-150 150" gainprm="300 100 0.1 0.1 0.1 0" joint="right_hip_joint"/>
-  	<general gaintype="user" biastype="user" forcerange="-100 100" gainprm="200 100 0.1 0.1 0.1 0" joint="right_knee_joint"/>
-  	<general gaintype="user" biastype="user" forcerange="-50 50" gainprm="50 100 0.1 0.1 0.1 0" joint="right_ankle_joint"/>
-  	<general gaintype="user" biastype="user" forcerange="-150 150" gainprm="300 100 0.1 0.1 0.1 0" joint="left_hip_joint"/>
-  	<general gaintype="user" biastype="user" forcerange="-100 100" gainprm="200 100 0.1 0.1 0.1 0" joint="left_knee_joint"/>
-  	<general gaintype="user" biastype="user" forcerange="-50 50" gainprm="50 100 0.1 0.1 0.1 0" joint="left_ankle_joint"/>
-    <!-- <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="150" joint="right_hip_joint"/>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="150" joint="right_hip_joint"/>
     <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="100" joint="right_knee_joint"/>
     <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="50" joint="right_ankle_joint"/>
     <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="150" joint="left_hip_joint"/>
     <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="100" joint="left_knee_joint"/>
-    <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="50" joint="left_ankle_joint"/> -->
-    <!-- <motor joint="finger2_rot" ctrlrange="-20.0 20.0" isctrllimited="true"/>-->
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" gear="50" joint="left_ankle_joint"/>
+    <!-- <motor joint="finger2_rot" ctrlrange="-20.0 20.0" isctrllimited="true"/> -->
   </actuator>
     <!-- <asset>
         <texture type="skybox" builtin="gradient" rgb1="1 1 1 " rgb2=".97 .97 1"

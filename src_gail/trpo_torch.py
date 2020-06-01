@@ -1,3 +1,8 @@
+"""
+use torch controller instead of PID controller in the biped_2d_torch.xml
+"""
+
+
 import gym
 import time
 import os
@@ -320,7 +325,7 @@ def flatten_lists(listoflists):
     return [el for list_ in listoflists for el in list_]
 
 def get_task_short_name(args):
-    task_name = "trpo-"
+    task_name = "trpo-torch-"
     task_name += "%s-"%(Config.motion)
     task_name += str(args.seed)
     return task_name
@@ -432,7 +437,7 @@ def main(args):
     U.make_session(num_cpu=1).__enter__()
     set_global_seeds(args.seed)
     # from dp_env_v2 import DPEnv
-    from dp_env_biped import DPEnv
+    from dp_env_biped_torch import DPEnv
     # from dp_env_test import DPEnv
     env = DPEnv()
     # env = gym.make('Humanoid-v2')
@@ -484,7 +489,7 @@ def main(args):
 
 def argsparser():
     parser = argparse.ArgumentParser("Tensorflow Implementation of GAIL")
-    parser.add_argument('--seed', help='RNG seed', type=int, default=1)
+    parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--checkpoint_dir', help='the directory to save model', default='checkpoint')
     parser.add_argument('--log_dir', help='the directory to save log file', default='log')
     parser.add_argument('--load_model_path', help='if provided, load the model', type=str, default=None)
@@ -503,7 +508,7 @@ def argsparser():
     parser.add_argument('--max_kl', type=float, default=0.01)
     parser.add_argument('--policy_entcoeff', help='entropy coefficiency of policy', type=float, default=0)
     # Traing Configuration
-    parser.add_argument('--save_per_iter', help='save model every xx iterations', type=int, default=100)
+    parser.add_argument('--save_per_iter', help='save model every xx iterations', type=int, default=10)
     parser.add_argument('--num_timesteps', help='number of timesteps per episode', type=int, default=1e8)
     parser.add_argument('--pretrained_weight_path', help='path of pretrained weights', type=str, default=None)
     return parser.parse_args()

@@ -103,7 +103,7 @@ class MocapDM(object):
             offset_idx += 2
             self.data[k, init_idx:offset_idx] = np.array(state['root_pos'])
             if k == 0:
-                tmp_vel += [0.0, 0.0, 0.0]
+                tmp_vel += [0.0, 0.0]
             else:
                 tmp_vel += ((self.data[k, init_idx:offset_idx] - self.data[k-1, init_idx:offset_idx])*1.0/dura).tolist()
             tmp_angle += state['root_pos'].tolist()
@@ -113,10 +113,10 @@ class MocapDM(object):
             offset_idx += 1
             self.data[k, init_idx:offset_idx] = np.array(state['root_rot'])
             if k == 0:
-                tmp_vel += [0.0, 0.0, 0.0]
+                tmp_vel += [0.0]
             else:
                 # tmp_vel += self.calc_rot_vel(self.data[k, init_idx:offset_idx], self.data[k-1, init_idx:offset_idx], dura)
-                tmp_vel += (self.data[k, init_idx:offset_idx] - self.data[k-1, init_idx:offset_idx])*1/dura
+                tmp_vel += list((self.data[k, init_idx:offset_idx] - self.data[k-1, init_idx:offset_idx])*1/dura)
             tmp_angle += state['root_rot'].tolist()
 
             for each_joint in BIPEDAL_JOINTS_ORDER:
@@ -129,7 +129,7 @@ class MocapDM(object):
                     if k == 0:
                         tmp_vel += [0.0]
                     else:
-                        tmp_vel += ((self.data[k, init_idx:offset_idx] - self.data[k-1, init_idx:offset_idx])*1.0/dura).tolist()
+                        tmp_vel += list(((self.data[k, init_idx:offset_idx] - self.data[k-1, init_idx:offset_idx])*1.0/dura).tolist())
                     tmp_angle += state[each_joint].tolist()
                 elif BIPEDAL_JOINTS_DOF[each_joint] == 3:
                     assert 4 == len(tmp_val)

@@ -103,7 +103,7 @@ class MocapDM(object):
             offset_idx += 2
             self.data[k, init_idx:offset_idx] = np.array(state['root_pos'])
             if k == 0:
-                tmp_vel += ((self.data[len(self.all_states)-1, init_idx:offset_idx] - self.data[len(self.all_states)-2, init_idx:offset_idx])*1.0/dura).tolist()
+                tmp_vel += [0,0]
             else:
                 tmp_vel += ((self.data[k, init_idx:offset_idx] - self.data[k-1, init_idx:offset_idx])*1.0/dura).tolist()
             tmp_angle += state['root_pos'].tolist()
@@ -113,7 +113,7 @@ class MocapDM(object):
             offset_idx += 1
             self.data[k, init_idx:offset_idx] = np.array(state['root_rot'])
             if k == 0:
-                tmp_vel += list((self.data[len(self.all_states)-1, init_idx:offset_idx] - self.data[len(self.all_states)-2, init_idx:offset_idx])*1/dura)
+                tmp_vel += [0]
             else:
                 # tmp_vel += self.calc_rot_vel(self.data[k, init_idx:offset_idx], self.data[k-1, init_idx:offset_idx], dura)
                 tmp_vel += list((self.data[k, init_idx:offset_idx] - self.data[k-1, init_idx:offset_idx])*1/dura)
@@ -154,7 +154,7 @@ class MocapDM(object):
                     #     print(diff)
             self.data_vel.append(np.array(tmp_vel))
             self.data_config.append(np.array(tmp_angle))
-
+        self.data_vel[0] = self.data_vel[len(self.all_states)-1] # the first frame vel same as the last
     def play(self, mocap_filepath):
         from mujoco_py import load_model_from_xml, MjSim, MjViewer
 
@@ -165,7 +165,7 @@ class MocapDM(object):
 
         model = load_model_from_xml(MODEL_XML)
         sim = MjSim(model)
-        # viewer = MjViewer(sim)
+        viewer = MjViewer(sim)
 
         self.read_raw_data(mocap_filepath)
         self.convert_raw_data()
@@ -175,15 +175,21 @@ class MocapDM(object):
         phase_offset = np.array([0.0, 0.0, 0.0])
 
         while True:
+            print(self.data_vel)
             for k in range(len(self.data)):
                 tmp_val = self.data_config[k]
+                tmp_vel = self.data_vel[k]
                 sim_state = sim.get_state()
                 sim_state.qpos[:] = tmp_val[:]
+                sim_state.qvel[:] = tmp_vel[:]
+                print(tmp_vel)
                 # sim_state.qpos[:3] +=  phase_offset[:]
                 sim.set_state(sim_state)
                 sim.forward()
-                # viewer.render()
-                print(sim_state.qpos)
+                for i in range(int(self.durations[0]/0.002)):
+                    sim.step()
+                    viewer.render()
+                    print(sim_state.qpos)
 
             sim_state = sim.get_state()
             # phase_offset = sim_state.qpos[:3]
@@ -194,4 +200,4 @@ class MocapDM(object):
 if __name__ == "__main__":
     test = MocapDM()
     curr_path = getcwd()
-    test.play(curr_path + "/mujoco/motions/biped_walk.txt")
+    test.play(curr_path + "/mujoco/motions/biped_run.txt")

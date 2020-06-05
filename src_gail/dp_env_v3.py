@@ -16,6 +16,7 @@ from config import Config
 from pyquaternion import Quaternion
 
 from transformations import quaternion_from_euler
+from box import Box
 
 BODY_JOINTS = ["chest", "neck", "right_shoulder", "right_elbow", 
             "left_shoulder", "left_elbow", "right_hip", "right_knee", 
@@ -170,7 +171,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 if __name__ == "__main__":
     env = DPEnv()
     env.reset_model()
-
+    
     import cv2
     from VideoSaver import VideoSaver
     width = 640

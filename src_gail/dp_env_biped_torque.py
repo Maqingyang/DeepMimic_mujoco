@@ -3,7 +3,7 @@ import numpy as np
 import math
 import random
 from os import getcwd
-
+import os.path as osp
 from mujoco.mocap_bipedal_2D import MocapDM
 from mujoco.mujoco_interface import MujocoInterface
 from mujoco.mocap_util import JOINT_WEIGHT
@@ -12,11 +12,11 @@ from mujoco_py import load_model_from_xml, MjSim, MjViewer
 from gym.envs.mujoco import mujoco_env
 from gym import utils
 
-from config_biped_torch import Config
+# from config_biped_torch import Config
 from pyquaternion import Quaternion
 
 from transformations import quaternion_from_euler
-
+from box import Box
 
 def mass_center(model, sim):
     mass = np.expand_dims(model.body_mass, 1)
@@ -27,12 +27,13 @@ def lerp(qpos_0, qpos_1, ratio):
 
 
 class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
-    def __init__(self):
-        xml_file_path = Config.xml_path
+    def __init__(self,C):
+
+        xml_file_path = osp.join(getcwd(), C.xml_folder, C.env_file)
 
         self.mocap = MocapDM()
         self.interface = MujocoInterface()
-        self.load_mocap(Config.mocap_path)
+        self.load_mocap(osp.join(getcwd(), C.motion_folder, C.motion_file))
 
         self.weight_pose = 0.5
         self.weight_vel = 0.05
@@ -113,6 +114,21 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_config = target_config
         self.target_vel = target_vel
 
+    def sample_1_expert_traj(self, policy_freq):
+        interval = 1./policy_freq
+        curr_time = np.random.uniform(0, self.mocap_period-interval)
+        # curr_time = (self.data.time + self.idx_init*self.mocap_dt) % self.mocap_period
+        # curr_periord = (self.data.time + self.idx_init*self.mocap_dt) // self.mocap_period
+        # root_shift = curr_periord*self.mocap.data_config[self.mocap_data_len-1][:1]
+
+        idx_curr = int(curr_time // self.mocap_dt)  
+        ratio = 1 - (curr_time % self.mocap_dt) / self.mocap_dt
+    
+        pos_0 = lerp(self.mocap.data_config[idx_curr],self.mocap.data_config[idx_curr + 1],ratio)        
+        curr_time += interval
+        ratio = 1 - (curr_time % self.mocap_dt) / self.mocap_dt
+        pos_0 = lerp(self.mocap.data_config[idx_curr],self.mocap.data_config[idx_curr + 1],ratio)
+
     def step(self, action):
         # self.step_len = int(self.mocap_dt // self.model.opt.timestep)
         self.step_len = 1
@@ -177,7 +193,8 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         # self.viewer.cam.elevation = -20
 
 if __name__ == "__main__":
-    env = DPEnv()
+    C = Box.from_yaml(filename="config/biped_torch.yaml")
+    env = DPEnv(C)
     env.reset_model()
 
     import cv2
@@ -203,7 +220,7 @@ if __name__ == "__main__":
         # env.sim.step()
         observation, reward, done, info = env.step(env.action_space.sample())
         env.goto(env.target_config)
-        env.viewer.render()
+        # env.viewer.render()
         # if done:
         #     env.reset_model()
         # env.calc_config_reward()

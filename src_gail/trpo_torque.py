@@ -6,9 +6,11 @@ use torch controller instead of PID controller in the biped_2d_torch.xml
 import gym
 import time
 import os
+import os.path as osp
 import dataset
 import logger
 import argparse
+import datetime
 
 import tensorflow as tf
 import utils.tf_util as U
@@ -26,7 +28,7 @@ from mpi_adam import MpiAdam
 from statistics import stats
 from mlp_policy import MlpPolicy
 
-from config_biped import Config
+from box import Box
 
 def traj_segment_generator(pi, env, horizon, stochastic):
     # Initialize state variables
@@ -221,7 +223,8 @@ def learn(env, policy_func, *,
 
         # Save model
         if rank == 0 and iters_so_far % save_per_iter == 0 and ckpt_dir is not None:
-            fname = os.path.join(ckpt_dir, task_name)
+            # fname = os.path.join(ckpt_dir, task_name)
+            fname = osp.join(ckpt_dir,"%s_%06d" %(task_name,iters_so_far))
             os.makedirs(os.path.dirname(fname), exist_ok=True)
             saver = tf.train.Saver()
             saver.save(tf.get_default_session(), fname)
@@ -323,12 +326,6 @@ def learn(env, policy_func, *,
 
 def flatten_lists(listoflists):
     return [el for list_ in listoflists for el in list_]
-
-def get_task_short_name(args):
-    task_name = "trpo-torch-"
-    task_name += "%s-"%(Config.motion)
-    task_name += str(args.seed)
-    return task_name
 
 def train(env, seed, policy_fn, g_step, policy_entcoeff, pretrained_weight_path,
           num_timesteps, save_per_iter, checkpoint_dir, log_dir, task_name=None):
@@ -433,48 +430,70 @@ def traj_1_generator(pi, env, horizon, stochastic):
             "ep_ret": cur_ep_ret, "ep_len": cur_ep_len}
     return traj
 
+
+def get_outdir(identifier):
+    # load config
+    name += "-%s" % git_hash()
+    name += "-%s" % identifier
+    outdir = osp.join(osp.expanduser(C.io.logdir), name)
+    outdir = name
+    if not osp.exists(outdir):
+        os.makedirs(outdir)
+    C.io.resume_from = outdir
+    C.to_yaml(osp.join(outdir, "config.yaml"))
+    os.system(f"git diff HEAD > {outdir}/gitdiff.patch")
+    return outdir
+
 def main(args):
     U.make_session(num_cpu=1).__enter__()
-    set_global_seeds(args.seed)
+
+    C = Box.from_yaml(filename=args.config)
+
+    set_global_seeds(C.seed)
     # from dp_env_v2 import DPEnv
     from dp_env_biped_torch import DPEnv
-    # from dp_env_test import DPEnv
-    env = DPEnv()
-    # env = gym.make('Humanoid-v2')
+    env = DPEnv(C)
 
-    task_name = get_task_short_name(args)
+    # task_name = get_task_short_name(args)
 
     def policy_fn(name, ob_space, ac_space, reuse=False):
         return MlpPolicy(name=name, ob_space=ob_space, ac_space=ac_space,
-                                    reuse=reuse, hid_size=args.policy_hidden_size, num_hid_layers=2)
+                                    reuse=reuse, hid_size=C.policy_hidden_size, num_hid_layers=C.num_hid_layers)
 
     if args.task == 'train':
         import logging
-        import os.path as osp
         import bench
+
+        save_name = str(datetime.datetime.now().strftime("%y%m%d-%H%M%S"))
+        save_name += "-%s" % osp.basename(args.config).split('.')[0]
+        checkpoint_dir = osp.join(C.checkpoint_dir, save_name)
+        log_dir = osp.join(checkpoint_dir, "log")
+        task_name = C.motion_file.split('.')[0]
+
+
         if MPI is None or MPI.COMM_WORLD.Get_rank() == 0:
-            logger.configure(dir='log_trpo/%s'%task_name)
+            logger.configure(dir=log_dir)
         if MPI.COMM_WORLD.Get_rank() != 0:
             logger.set_level(logger.DISABLED)
         env = bench.Monitor(env, logger.get_dir() and
                             osp.join(logger.get_dir(), "monitor.json"))
-        env.seed(args.seed)
+        env.seed(C.seed)
         gym.logger.setLevel(logging.WARN)
+    
 
-        args.checkpoint_dir = osp.join(args.checkpoint_dir, task_name)
-        args.log_dir = osp.join(args.log_dir, task_name)
 
         train(env,
-              args.seed,
+              C.seed,
               policy_fn,
-              args.g_step,
-              args.policy_entcoeff,
-              args.pretrained_weight_path,
-              args.num_timesteps,
-              args.save_per_iter,
-              args.checkpoint_dir,
-              args.log_dir,
+              C.g_step,
+              C.policy_entcoeff,
+              C.pretrained_weight_path,
+              C.num_timesteps,
+              C.save_per_iter,
+              checkpoint_dir,
+              log_dir,
               task_name)
+
     elif args.task == 'evaluate':
         runner(env,
                policy_fn,
@@ -489,28 +508,14 @@ def main(args):
 
 def argsparser():
     parser = argparse.ArgumentParser("Tensorflow Implementation of GAIL")
-    parser.add_argument('--seed', help='RNG seed', type=int, default=0)
-    parser.add_argument('--checkpoint_dir', help='the directory to save model', default='checkpoint')
-    parser.add_argument('--log_dir', help='the directory to save log file', default='log')
-    parser.add_argument('--load_model_path', help='if provided, load the model', type=str, default=None)
-    # Task
-    parser.add_argument('--task', type=str, choices=['train', 'evaluate', 'sample'], default='train')
+    parser.add_argument('--config', help='yaml config file path', type=str)
     # for evaluatation
+    parser.add_argument('--task', type=str, choices=['train', 'evaluate', 'sample'], default='train')
     boolean_flag(parser, 'stochastic_policy', default=False, help='use stochastic/deterministic policy to evaluate')
     boolean_flag(parser, 'save_sample', default=False, help='save the trajectories or not')
-    #  Mujoco Dataset Configuration
-    parser.add_argument('--traj_limitation', type=int, default=-1)
-    # Optimization Configuration
-    parser.add_argument('--g_step', help='number of steps to train policy in each epoch', type=int, default=3)
-    # Network Configuration (Using MLP Policy)
-    parser.add_argument('--policy_hidden_size', type=int, default=100)
-    # Algorithms Configuration
-    parser.add_argument('--max_kl', type=float, default=0.01)
-    parser.add_argument('--policy_entcoeff', help='entropy coefficiency of policy', type=float, default=0)
-    # Traing Configuration
-    parser.add_argument('--save_per_iter', help='save model every xx iterations', type=int, default=10)
-    parser.add_argument('--num_timesteps', help='number of timesteps per episode', type=int, default=1e8)
-    parser.add_argument('--pretrained_weight_path', help='path of pretrained weights', type=str, default=None)
+    parser.add_argument('--load_model_path', help='if provided, load the model', type=str, default=None)
+
+
     return parser.parse_args()
 
 if __name__ == "__main__":

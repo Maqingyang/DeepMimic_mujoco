@@ -103,7 +103,7 @@ class MocapDM(object):
             offset_idx += 2
             self.data[k, init_idx:offset_idx] = np.array(state['root_pos'])
             if k == 0:
-                tmp_vel += [0.0, 0.0]
+                tmp_vel += ((self.data[len(self.all_states)-1, init_idx:offset_idx] - self.data[len(self.all_states)-2, init_idx:offset_idx])*1.0/dura).tolist()
             else:
                 tmp_vel += ((self.data[k, init_idx:offset_idx] - self.data[k-1, init_idx:offset_idx])*1.0/dura).tolist()
             tmp_angle += state['root_pos'].tolist()
@@ -113,7 +113,7 @@ class MocapDM(object):
             offset_idx += 1
             self.data[k, init_idx:offset_idx] = np.array(state['root_rot'])
             if k == 0:
-                tmp_vel += [0.0]
+                tmp_vel += list((self.data[len(self.all_states)-1, init_idx:offset_idx] - self.data[len(self.all_states)-2, init_idx:offset_idx])*1/dura)
             else:
                 # tmp_vel += self.calc_rot_vel(self.data[k, init_idx:offset_idx], self.data[k-1, init_idx:offset_idx], dura)
                 tmp_vel += list((self.data[k, init_idx:offset_idx] - self.data[k-1, init_idx:offset_idx])*1/dura)

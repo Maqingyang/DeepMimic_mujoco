@@ -116,18 +116,32 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def sample_1_expert_traj(self, policy_freq):
         interval = 1./policy_freq
-        curr_time = np.random.uniform(0, self.mocap_period-interval)
-        # curr_time = (self.data.time + self.idx_init*self.mocap_dt) % self.mocap_period
-        # curr_periord = (self.data.time + self.idx_init*self.mocap_dt) // self.mocap_period
-        # root_shift = curr_periord*self.mocap.data_config[self.mocap_data_len-1][:1]
 
+        curr_time = np.random.uniform(0, self.mocap_period-interval)
         idx_curr = int(curr_time // self.mocap_dt)  
         ratio = 1 - (curr_time % self.mocap_dt) / self.mocap_dt
-    
-        pos_0 = lerp(self.mocap.data_config[idx_curr],self.mocap.data_config[idx_curr + 1],ratio)        
-        curr_time += interval
+        pos_0 = lerp(self.mocap.data_config[idx_curr],self.mocap.data_config[idx_curr + 1],ratio)  
+
+        curr_time += interval        
+        idx_curr = int(curr_time // self.mocap_dt)  
         ratio = 1 - (curr_time % self.mocap_dt) / self.mocap_dt
-        pos_0 = lerp(self.mocap.data_config[idx_curr],self.mocap.data_config[idx_curr + 1],ratio)
+        pos_1 = lerp(self.mocap.data_config[idx_curr],self.mocap.data_config[idx_curr + 1],ratio)
+
+        pos_1[0] -= pos_0[0]
+        pos_0[0] = 0
+
+        return np.concatenate([pos_0,pos_1])
+        
+    def sample_expert_traj(self,policy_freq):
+        num_sample = 1024
+        sample_list = []
+        for i in range(num_sample):
+            sample = self.sample_1_expert_traj(policy_freq)
+            sample_list.append(sample)
+        
+        return np.array(sample_list)
+            
+
 
     def step(self, action):
         # self.step_len = int(self.mocap_dt // self.model.opt.timestep)
@@ -167,7 +181,6 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return self.sim.data.time
 
     def reset_model(self):
-        self.sim.reset()
         self.reference_state_init()
         qpos = self.mocap.data_config[self.idx_init]
         qvel = self.mocap.data_vel[self.idx_init]
@@ -193,7 +206,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         # self.viewer.cam.elevation = -20
 
 if __name__ == "__main__":
-    C = Box.from_yaml(filename="config/biped_torch.yaml")
+    C = Box.from_yaml(filename="config/trpo_biped_torque.yaml")
     env = DPEnv(C)
     env.reset_model()
 
@@ -207,6 +220,9 @@ if __name__ == "__main__":
     # env.load_mocap("/home/mingfei/Documents/DeepMimic/mujoco/motions/humanoid3d_crawl.txt")
     action_size = env.action_space.shape[0]
     ac = np.zeros(action_size)
+    samples = env.sample_expert_traj(25)
+
+
     while True:
         # target_config = env.mocap.data_config[env.idx_curr][7:] # to exclude root joint
         # env.sim.data.qpos[7:] = target_config[:]
@@ -220,6 +236,9 @@ if __name__ == "__main__":
         # env.sim.step()
         observation, reward, done, info = env.step(env.action_space.sample())
         env.goto(env.target_config)
+
+        env.reset()
+        print(env.data.qvel)
         # env.viewer.render()
         # if done:
         #     env.reset_model()

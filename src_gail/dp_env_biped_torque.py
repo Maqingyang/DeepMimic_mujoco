@@ -51,9 +51,11 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.reference_state_init()
         self.idx_curr = -1
         self.idx_tmp_count = -1
+        self.policy_freq = 25
+        self.is_gail = C.is_gail
 
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
-        self.viewer = MjViewer(self.sim)
+        # self.viewer = MjViewer(self.sim)
         utils.EzPickle.__init__(self)
 
     def _get_obs(self):
@@ -62,6 +64,10 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         ## add mocap data as additional observation
         target_config = self.target_config
         target_vel = self.target_vel
+        
+        if self.is_gail:
+            return np.concatenate((position, velocity)) 
+
         return np.concatenate((position, velocity, target_config, target_vel))
 
     def reference_state_init(self):
@@ -114,8 +120,8 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_config = target_config
         self.target_vel = target_vel
 
-    def sample_1_expert_traj(self, policy_freq):
-        interval = 1./policy_freq
+    def sample_1_expert_traj(self):
+        interval = 1./self.policy_freq
 
         curr_time = np.random.uniform(0, self.mocap_period-interval)
         idx_curr = int(curr_time // self.mocap_dt)  
@@ -132,11 +138,11 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return np.concatenate([pos_0,pos_1])
         
-    def sample_expert_traj(self,policy_freq):
+    def sample_expert_traj(self):
         num_sample = 1024
         sample_list = []
         for i in range(num_sample):
-            sample = self.sample_1_expert_traj(policy_freq)
+            sample = self.sample_1_expert_traj()
             sample_list.append(sample)
         
         return np.array(sample_list)
@@ -148,7 +154,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.step_len = 1
         # step_times = int(self.mocap_dt // self.model.opt.timestep)
         step_times = 1
-        for i in range(20): # 500 HZ / 20 = 25 HZ
+        for i in range(int(500/self.policy_freq)): # 500 / 25 = 20
             self.do_simulation(action, step_times)
 
         self.update_target_frame()

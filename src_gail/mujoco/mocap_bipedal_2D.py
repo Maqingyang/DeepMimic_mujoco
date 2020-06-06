@@ -155,6 +155,8 @@ class MocapDM(object):
             self.data_vel.append(np.array(tmp_vel))
             self.data_config.append(np.array(tmp_angle))
         self.data_vel[0] = self.data_vel[len(self.all_states)-1] # the first frame vel same as the last
+
+        
     def play(self, mocap_filepath):
         from mujoco_py import load_model_from_xml, MjSim, MjViewer
 

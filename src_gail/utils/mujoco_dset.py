@@ -95,6 +95,24 @@ class Dset_mocap(object):
         self.pointer = end
         return mocap_config, mocap_vel
 
+class Dset_transition(object):
+    def __init__(self, transitions):
+        self.transitions = transitions
+        self.num_transitions = transitions.shape[0]
+
+
+
+    def get_next_batch(self, batch_size):
+        # if batch_size is negative -> return all
+        if batch_size < 0:
+            return self.transitions
+
+        index = np.random.randint(0, self.num_transitions, batch_size)
+        transitions_batch = self.transitions[index]
+
+        return transitions_batch
+
+
 class Mujoco_Dset(object):
     def __init__(self, expert_path, train_fraction=0.7, traj_limitation=-1, randomize=True):
         traj_data = np.load(expert_path)

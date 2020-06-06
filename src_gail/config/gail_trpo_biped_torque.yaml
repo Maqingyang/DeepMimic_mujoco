@@ -4,7 +4,7 @@ motion_folder: mujoco/motions
 xml_folder: mujoco/bipedal/envs/asset
 checkpoint_dir: checkpoint/
 # Env
-motion_file: biped_run.txt
+motion_file: biped_walk.txt
 env_file: bipedal_2d_torch.xml
 # Train
 seed: 0
@@ -20,5 +20,9 @@ g_step: 3
 num_hid_layers: 2
 policy_hidden_size: 100
 traj_limitation: -1
-#GAIL
-is_gail: false
+# GAIL
+is_gail: true
+expert_path: null
+d_step: 1
+adversary_hidden_size: 100
+adversary_entcoeff: 1e-3

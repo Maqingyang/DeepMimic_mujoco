@@ -53,7 +53,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.idx_tmp_count = -1
 
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
-        # self.viewer = MjViewer(self.sim)
+        self.viewer = MjViewer(self.sim)
         utils.EzPickle.__init__(self)
 
     def _get_obs(self):
@@ -222,6 +222,16 @@ if __name__ == "__main__":
     ac = np.zeros(action_size)
     samples = env.sample_expert_traj(25)
 
+    while True:
+        sample = samples[np.random.randint(0,1024)]
+        pos_0 = sample[:9]
+        pos_1 = sample[9:]
+        env.goto(pos_0)
+        env.viewer.render()
+        env.goto(pos_1)
+        env.viewer.render()
+
+
 
     while True:
         # target_config = env.mocap.data_config[env.idx_curr][7:] # to exclude root joint
@@ -235,6 +245,7 @@ if __name__ == "__main__":
         # env.set_state(qpos, qvel)
         # env.sim.step()
         observation, reward, done, info = env.step(env.action_space.sample())
+        
         env.goto(env.target_config)
 
         env.reset()

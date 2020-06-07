@@ -187,7 +187,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         xpos = self.sim.data.xipos
         z_com = (np.sum(mass * xpos, 0) / np.sum(mass))[2] # bipedal mass center at 0.7937
         done = bool((z_com < 0.4) or (z_com > 1.0))
-        if self.data.time > 3:
+        if self.data.time > 1:
             done = True
         return done
 

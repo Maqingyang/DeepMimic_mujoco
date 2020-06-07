@@ -1,0 +1,24 @@
+## basic experiment with torque controller
+# io
+motion_folder: mujoco/motions
+xml_folder: mujoco/bipedal/envs/asset
+checkpoint_dir: checkpoint/
+# Env
+motion_file: biped_walk.txt
+env_file: bipedal_2d_PID.xml
+# Train
+seed: 0
+timesteps_per_batch: 1024
+num_timesteps: 1e7
+save_per_iter: 20
+pretrained_weight_path: null
+tensorboard_port: 6006
+# Model
+max_kl: 0.01
+policy_entcoeff: 0
+g_step: 3
+num_hid_layers: 2
+policy_hidden_size: 100
+traj_limitation: -1
+#GAIL
+is_gail: false

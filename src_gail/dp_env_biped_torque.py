@@ -53,7 +53,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.idx_tmp_count = -1
         self.policy_freq = 25
         self.is_gail = C.is_gail
-
+        self.init_time = 0
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
         # self.viewer = MjViewer(self.sim)
         utils.EzPickle.__init__(self)
@@ -71,10 +71,20 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return np.concatenate((position, velocity, target_config, target_vel))
 
     def reference_state_init(self):
-        self.idx_init = random.randint(0, self.mocap_data_len-1)
-        # self.idx_init = 0
-        self.idx_curr = self.idx_init
-        self.idx_tmp_count = 0
+        # self.idx_init = random.randint(0, self.mocap_data_len-1)
+        # # self.idx_init = 0
+        # self.idx_curr = self.idx_init
+        # self.idx_tmp_count = 0
+        curr_time = np.random.uniform(0, self.mocap_period)
+        self.init_time = curr_time
+        self.idx_curr = int(curr_time // self.mocap_dt)  
+        ratio = 1 - (curr_time % self.mocap_dt) / self.mocap_dt
+        target_config = lerp(self.mocap.data_config[self.idx_curr],self.mocap.data_config[self.idx_curr + 1],ratio)
+        target_vel = lerp(self.mocap.data_vel[self.idx_curr],self.mocap.data_vel[self.idx_curr + 1],ratio)
+
+        self.target_config = target_config
+        self.target_vel = target_vel
+
 
     def early_termination(self):
         pass
@@ -106,8 +116,8 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return reward_config
 
     def update_target_frame(self):
-        curr_time = (self.data.time + self.idx_init*self.mocap_dt) % self.mocap_period
-        curr_periord = (self.data.time + self.idx_init*self.mocap_dt) // self.mocap_period
+        curr_time = (self.data.time + self.init_time) % self.mocap_period
+        curr_periord = (self.data.time + self.init_time) // self.mocap_period
         root_shift = curr_periord*self.mocap.data_config[self.mocap_data_len-1][:1]
 
         self.idx_curr = int(curr_time // self.mocap_dt)  
@@ -121,7 +131,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_vel = target_vel
 
     def sample_1_expert_traj(self):
-        interval = np.clip(1+np.random.randn(), 1e-3, 2) * 1./self.policy_freq
+        interval = np.clip(1+0.1*np.random.randn(), 1e-3, 2) * 1./self.policy_freq
 
         curr_time = np.random.uniform(0, self.mocap_period-interval)
         idx_curr = int(curr_time // self.mocap_dt)  
@@ -190,8 +200,8 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def reset_model(self):
         self.reference_state_init()
-        qpos = self.mocap.data_config[self.idx_init]
-        qvel = self.mocap.data_vel[self.idx_init]
+        qpos = self.target_config
+        qvel = self.target_vel
         # qvel = self.init_qvel
         self.set_state(qpos, qvel)
         observation = self._get_obs()

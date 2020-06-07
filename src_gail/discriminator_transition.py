@@ -38,10 +38,12 @@ class Discriminator(object):
         logits = tf.concat([generator_logits, expert_logits], 0)
         entropy = tf.reduce_mean(logit_bernoulli_entropy(logits))
         entropy_loss = -entcoeff*entropy
+        regular_loss = tf.nn.l2_loss(logits)
+        regular_loss = 1e-4*tf.reduce_mean(regular_loss)
         # Loss + Accuracy terms
-        self.losses = [generator_loss, expert_loss, entropy, entropy_loss, generator_acc, expert_acc]
-        self.loss_name = ["generator_loss", "expert_loss", "entropy", "entropy_loss", "generator_acc", "expert_acc"]
-        self.total_loss = generator_loss + expert_loss + entropy_loss
+        self.losses = [generator_loss, expert_loss, entropy, entropy_loss, generator_acc, expert_acc, regular_loss]
+        self.loss_name = ["generator_loss", "expert_loss", "entropy", "entropy_loss", "generator_acc", "expert_acc","regular_loss"]
+        self.total_loss = generator_loss + expert_loss + entropy_loss + regular_loss
         # Build Reward for policy
         self.reward_op = -tf.log(1-tf.nn.sigmoid(generator_logits)+1e-8)
         var_list = self.get_trainable_variables()

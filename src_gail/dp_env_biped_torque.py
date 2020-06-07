@@ -121,7 +121,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_vel = target_vel
 
     def sample_1_expert_traj(self):
-        interval = 1./self.policy_freq
+        interval = np.clip(1+np.random.randn(), 1e-3, 2) * 1./self.policy_freq
 
         curr_time = np.random.uniform(0, self.mocap_period-interval)
         idx_curr = int(curr_time // self.mocap_dt)  
@@ -139,7 +139,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return np.concatenate([pos_0,pos_1])
         
     def sample_expert_traj(self):
-        num_sample = 1024
+        num_sample = 1024*128
         sample_list = []
         for i in range(num_sample):
             sample = self.sample_1_expert_traj()
@@ -176,7 +176,9 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         mass = np.expand_dims(self.model.body_mass, 1)
         xpos = self.sim.data.xipos
         z_com = (np.sum(mass * xpos, 0) / np.sum(mass))[2] # bipedal mass center at 0.7937
-        done = bool((z_com < 0.4) or (z_com > 1.5))
+        done = bool((z_com < 0.4) or (z_com > 1.0))
+        if self.data.time > 3:
+            done = True
         return done
 
     def goto(self, pos):
@@ -226,7 +228,7 @@ if __name__ == "__main__":
     # env.load_mocap("/home/mingfei/Documents/DeepMimic/mujoco/motions/humanoid3d_crawl.txt")
     action_size = env.action_space.shape[0]
     ac = np.zeros(action_size)
-    samples = env.sample_expert_traj(25)
+    samples = env.sample_expert_traj()
 
     while True:
         sample = samples[np.random.randint(0,1024)]

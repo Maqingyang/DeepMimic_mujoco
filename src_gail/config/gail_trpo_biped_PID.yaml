@@ -26,4 +26,4 @@ expert_path: null
 d_step: 1
 adversary_hidden_size: 100
 adversary_entcoeff: 1e-3
-d_stepsize: 1e-4
+d_stepsize: 1e-5

@@ -338,8 +338,8 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, *,
         # ------------------ Update D ------------------
         logger.log("Optimizing Discriminator...")
         logger.log(fmt_row(13, reward_giver.loss_name))
-        batch_size = 1024
-        # batch_size = 256
+        # batch_size = 1024
+        batch_size = 256
         d_losses = []  # list of tuples, each of which gives the loss for a minibatch
 
         transitions_all = np.concatenate(replay_buffer['transitions'], axis=0)

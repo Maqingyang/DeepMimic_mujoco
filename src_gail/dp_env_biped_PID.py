@@ -51,7 +51,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.reference_state_init()
         self.idx_curr = -1
         self.idx_tmp_count = -1
-        self.policy_freq = 25
+        self.policy_freq = 100
         self.is_gail = C.is_gail
         self.init_time = 0
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)

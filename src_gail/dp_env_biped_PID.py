@@ -51,7 +51,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.reference_state_init()
         self.idx_curr = -1
         self.idx_tmp_count = -1
-        self.policy_freq = 25
+        self.policy_freq = 100
         self.is_gail = C.is_gail
         self.init_time = 0
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
@@ -163,12 +163,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
 
     def step(self, action):
-        # self.step_len = int(self.mocap_dt // self.model.opt.timestep)
-        self.step_len = 1
-        # step_times = int(self.mocap_dt // self.model.opt.timestep)
-        step_times = 1
-        for i in range(int(500/self.policy_freq)): # 500 / 25 = 20
-            self.do_simulation(action, step_times)
+        self.do_simulation(action, n_frames=int(1000/self.policy_freq))
 
         self.update_target_frame()
         # reward_alive = 1.0

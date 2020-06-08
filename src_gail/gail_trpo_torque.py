@@ -338,14 +338,15 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, *,
         # ------------------ Update D ------------------
         logger.log("Optimizing Discriminator...")
         logger.log(fmt_row(13, reward_giver.loss_name))
-        batch_size = 128
+        batch_size = 1024
+        # batch_size = 256
         d_losses = []  # list of tuples, each of which gives the loss for a minibatch
 
         transitions_all = np.concatenate(replay_buffer['transitions'], axis=0)
-        sample_idx = np.random.randint(0, transitions_all.shape[0], timesteps_per_batch)
-        transitions_downsample = transitions_all[sample_idx]
+        # sample_idx = np.random.randint(0, transitions_all.shape[0], timesteps_per_batch*8)
+        # transitions_downsample = transitions_all[sample_idx]
 
-        for transition_batch, _ in dataset.iterbatches((transitions_downsample, transitions_downsample),
+        for transition_batch, _ in dataset.iterbatches((transitions_all, transitions_all),
                                                       include_final_partial_batch=False,
                                                       batch_size=batch_size):
             transition_expert = expert_dataset.get_next_batch(len(transition_batch))
@@ -466,7 +467,7 @@ def traj_1_generator(pi, env, horizon, stochastic):
     return traj
 
 def train(env, seed, policy_fn, reward_giver, expert_dataset,
-          g_step, d_step, policy_entcoeff, timesteps_per_batch, num_timesteps, save_per_iter,
+          g_step, d_step, d_stepsize, policy_entcoeff, timesteps_per_batch, num_timesteps, save_per_iter,
           checkpoint_dir, task_name=None):
 
     rank = MPI.COMM_WORLD.Get_rank()
@@ -476,7 +477,7 @@ def train(env, seed, policy_fn, reward_giver, expert_dataset,
     set_global_seeds(workerseed)
     env.seed(workerseed)
     learn(env, policy_fn, reward_giver, expert_dataset, rank,
-                    g_step=g_step, d_step=d_step,
+                    g_step=g_step, d_step=d_step, d_stepsize=d_stepsize,
                     entcoeff=policy_entcoeff,
                     max_timesteps=num_timesteps,
                     ckpt_dir=checkpoint_dir, 
@@ -490,7 +491,7 @@ def train(env, seed, policy_fn, reward_giver, expert_dataset,
 
 def main(args):
     U.make_session(num_cpu=1).__enter__()
-    args.config = "config/gail_trpo_biped_torque.yaml"
+    # args.config = "config/gail_trpo_biped_torque.yaml"
     C = Box.from_yaml(filename=args.config)
     set_global_seeds(C.seed)
 
@@ -515,11 +516,14 @@ def main(args):
         task_name = C.motion_file.split('.')[0]
 
         if MPI is None or MPI.COMM_WORLD.Get_rank() == 0:
+            os.makedirs(checkpoint_dir, exist_ok=True)
+            C.to_yaml(osp.join(checkpoint_dir, "config.yaml"))
             logger.configure(dir=log_dir)
         if MPI.COMM_WORLD.Get_rank() != 0:
             logger.set_level(logger.DISABLED)
         else:
             logger.set_level(logger.INFO)
+
 
         env = bench.Monitor(env, logger.get_dir() and
                             osp.join(logger.get_dir(), "monitor.json"))
@@ -537,6 +541,7 @@ def main(args):
               expert_dataset,
               C.g_step,
               C.d_step,
+              C.d_stepsize,
               C.policy_entcoeff,
               C.timesteps_per_batch,
               C.num_timesteps,

@@ -55,8 +55,6 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.is_gail = C.is_gail
         self.init_time = 0
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
-        print("m.nuserdata:",self.sim.model.nuserdata)
-        print("m.nu:",self.sim.model.nu)
         cymj.set_pid_control(self.sim.model, self.sim.data)
         # self.viewer = MjViewer(self.sim)
         utils.EzPickle.__init__(self)
@@ -68,25 +66,28 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         target_config = self.target_config
         target_vel = self.target_vel
         
+        # if self.is_gail:
+        #     return np.concatenate((position, velocity)) 
+        
         if self.is_gail:
-            return np.concatenate((position, velocity)) 
-
+            return np.concatenate((target_config, target_vel)) 
+        
         return np.concatenate((position, velocity, target_config, target_vel))
 
     def reference_state_init(self):
-        # self.idx_init = random.randint(0, self.mocap_data_len-1)
-        # # self.idx_init = 0
-        # self.idx_curr = self.idx_init
-        # self.idx_tmp_count = 0
-        curr_time = np.random.uniform(0, self.mocap_period)
-        self.init_time = curr_time
-        self.idx_curr = int(curr_time // self.mocap_dt)  
-        ratio = 1 - (curr_time % self.mocap_dt) / self.mocap_dt
-        target_config = lerp(self.mocap.data_config[self.idx_curr],self.mocap.data_config[self.idx_curr + 1],ratio)
-        target_vel = lerp(self.mocap.data_vel[self.idx_curr],self.mocap.data_vel[self.idx_curr + 1],ratio)
+        self.idx_init = random.randint(0, self.mocap_data_len-1)
+        # self.idx_init = 0
+        self.idx_curr = self.idx_init
+        self.idx_tmp_count = 0
+        # curr_time = np.random.uniform(0, self.mocap_period)
+        # self.init_time = curr_time
+        # self.idx_curr = int(curr_time // self.mocap_dt)  
+        # ratio = 1 - (curr_time % self.mocap_dt) / self.mocap_dt
+        # target_config = lerp(self.mocap.data_config[self.idx_curr],self.mocap.data_config[self.idx_curr + 1],ratio)
+        # target_vel = lerp(self.mocap.data_vel[self.idx_curr],self.mocap.data_vel[self.idx_curr + 1],ratio)
 
-        self.target_config = target_config
-        self.target_vel = target_vel
+        # self.target_config = target_config
+        # self.target_vel = target_vel
 
 
     def early_termination(self):
@@ -119,8 +120,10 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return reward_config
 
     def update_target_frame(self):
-        curr_time = (self.data.time + self.init_time) % self.mocap_period
-        curr_periord = (self.data.time + self.init_time) // self.mocap_period
+        # curr_time = (self.data.time + self.init_time) % self.mocap_period 
+        # curr_periord = (self.data.time + self.init_time) // self.mocap_period
+        curr_time = (self.data.time + self.idx_init*self.mocap_dt) % self.mocap_period 
+        curr_periord = (self.data.time + self.idx_init*self.mocap_dt) // self.mocap_period
         root_shift = curr_periord*self.mocap.data_config[self.mocap_data_len-1][:1]
 
         self.idx_curr = int(curr_time // self.mocap_dt)  
@@ -134,9 +137,11 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_vel = target_vel
 
     def sample_1_expert_traj(self):
-        interval = np.clip(1+0.1*np.random.randn(), 1e-3, 2) * 1./self.policy_freq
+        # interval = np.clip(1+0.1*np.random.randn(), 1e-3, 2) * 1./self.policy_freq
+        interval = 1./self.policy_freq
 
-        curr_time = np.random.uniform(0, self.mocap_period-interval)
+        # curr_time = np.random.uniform(0, self.mocap_period-interval)
+        curr_time = np.random.randint(0, self.mocap_data_len-1)*self.mocap_dt
         idx_curr = int(curr_time // self.mocap_dt)  
         ratio = 1 - (curr_time % self.mocap_dt) / self.mocap_dt
         pos_0 = lerp(self.mocap.data_config[idx_curr],self.mocap.data_config[idx_curr + 1],ratio)  
@@ -149,7 +154,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         pos_1[0] -= pos_0[0]
         pos_0[0] = 0
 
-        return np.concatenate([pos_0,pos_1])
+        return np.concatenate([pos_0, pos_1])
         
     def sample_expert_traj(self):
         num_sample = 1024*128
@@ -198,9 +203,10 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def reset_model(self):
         self.reference_state_init()
-        qpos = self.target_config
-        qvel = self.target_vel
-        # qvel = self.init_qvel
+        # qpos = self.target_config
+        # qvel = self.target_vel
+        qpos = self.mocap.data_config[self.idx_init]
+        qvel = self.mocap.data_vel[self.idx_init]
         self.set_state(qpos, qvel)
         observation = self._get_obs()
         # self.idx_tmp_count = -self.step_len

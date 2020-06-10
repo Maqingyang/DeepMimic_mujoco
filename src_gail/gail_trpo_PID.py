@@ -77,10 +77,11 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
 
         ob_len = len(ob)
         next_ob, true_rew, new, _ = env.step(ac)
-        pos_0 = ob[:ob_len//2]
-        pos_1 = next_ob[:ob_len//2]
+        pos_0 = ob[:ob_len//2].copy()
+        pos_1 = next_ob[:ob_len//2].copy()
         pos_1[0] -= pos_0[0]
         pos_0[0] = 0
+
         transition = np.concatenate([pos_0, pos_1])
         transitions[i] = transition
         d_rew = reward_giver.get_reward(transition)

@@ -1,31 +1,47 @@
 import numpy as np
 
-class Dataset(object):
-    def __init__(self, data_map, deterministic=False, shuffle=True):
-        self.data_map = data_map
-        self.deterministic = deterministic
-        self.enable_shuffle = shuffle
-        self.n = next(iter(data_map.values())).shape[0]
-        self._next_id = 0
-        self.shuffle()
 
-    def shuffle(self):
-        if self.deterministic:
-            return
-        perm = np.arange(self.n)
+class Dataset(object):
+    def __init__(self, data_map, shuffle=True):
+        """
+        Data loader that handles batches and shuffling.
+        WARNING: this will alter the given data_map ordering, as dicts are mutable
+
+        :param data_map: (dict) the input data, where every column is a key
+        :param shuffle: (bool) Whether to shuffle or not the dataset
+            Important: this should be disabled for recurrent policies
+        """
+        self.data_map = data_map
+        self.shuffle = shuffle
+        self.n_samples = next(iter(data_map.values())).shape[0]
+        self._next_id = 0
+        if self.shuffle:
+            self.shuffle_dataset()
+
+    def shuffle_dataset(self):
+        """
+        Shuffles the data_map
+        """
+        perm = np.arange(self.n_samples)
         np.random.shuffle(perm)
 
         for key in self.data_map:
             self.data_map[key] = self.data_map[key][perm]
 
-        self._next_id = 0
-
     def next_batch(self, batch_size):
-        if self._next_id >= self.n and self.enable_shuffle:
-            self.shuffle()
+        """
+        returns a batch of data of a given size
+
+        :param batch_size: (int) the size of the batch
+        :return: (dict) a batch of the input data of size 'batch_size'
+        """
+        if self._next_id >= self.n_samples:
+            self._next_id = 0
+            if self.shuffle:
+                self.shuffle_dataset()
 
         cur_id = self._next_id
-        cur_batch_size = min(batch_size, self.n - self._next_id)
+        cur_batch_size = min(batch_size, self.n_samples - self._next_id)
         self._next_id += cur_batch_size
 
         data_map = dict()
@@ -34,18 +50,31 @@ class Dataset(object):
         return data_map
 
     def iterate_once(self, batch_size):
-        if self.enable_shuffle: self.shuffle()
+        """
+        generator that iterates over the dataset
 
-        while self._next_id <= self.n - batch_size:
+        :param batch_size: (int) the size of the batch
+        :return: (dict) a batch of the input data of size 'batch_size'
+        """
+        if self.shuffle:
+            self.shuffle_dataset()
+
+        while self._next_id <= self.n_samples - batch_size:
             yield self.next_batch(batch_size)
         self._next_id = 0
 
-    def subset(self, num_elements, deterministic=True):
+    def subset(self, num_elements, shuffle=True):
+        """
+        Return a subset of the current dataset
+
+        :param num_elements: (int) the number of element you wish to have in the subset
+        :param shuffle: (bool) Whether to shuffle or not the dataset
+        :return: (Dataset) a new subset of the current Dataset object
+        """
         data_map = dict()
         for key in self.data_map:
             data_map[key] = self.data_map[key][:num_elements]
-        return Dataset(data_map, deterministic)
-
+        return Dataset(data_map, shuffle)
 
 def iterbatches(arrays, *, num_batches=None, batch_size=None, shuffle=True, include_final_partial_batch=True):
     assert (num_batches is None) != (batch_size is None), 'Provide num_batches or batch_size, but not both'

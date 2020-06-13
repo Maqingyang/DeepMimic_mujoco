@@ -55,6 +55,8 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.policy_freq = 25
         self.is_gail = C.is_gail
         self.init_time = 0
+        self.max_time = 1
+
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
 
         cymj.set_pid_control(self.sim.model, self.sim.data)
@@ -185,9 +187,15 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         xpos = self.sim.data.xipos
         z_com = (np.sum(mass * xpos, 0) / np.sum(mass))[2] # bipedal mass center at 0.7937
         done = bool((z_com < 0.4) or (z_com > 1.0))
-        if self.data.time > 1 and self.is_gail:
+        if self.data.time > self.max_time and self.is_gail:
             done = True
         return done
+
+    def set_max_time(self, t):
+        self.max_time = t
+
+    def get_max_time(self):
+        return self.max_time
 
     def goto(self, pos):
         self.sim.data.qpos[:] = pos[:]

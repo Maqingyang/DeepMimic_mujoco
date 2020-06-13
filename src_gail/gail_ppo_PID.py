@@ -3,6 +3,7 @@ import time
 import os
 import os.path as osp
 import dataset
+from dataset import Dataset
 import logger
 import argparse
 import datetime
@@ -119,13 +120,12 @@ def add_vtarg_and_adv(seg, gamma, lam):
     seg["tdlamret"] = seg["adv"] + seg["vpred"]
 
 
-def learn(env, policy_func, reward_giver, expert_dataset, rank, *,
-          g_step, d_step, entcoeff, save_per_iter,
-          ckpt_dir, timesteps_per_batch, task_name,
-          gamma, lam,
-          max_kl, cg_iters, cg_damping=1e-2,
-          vf_stepsize=3e-4, d_stepsize=1e-4, vf_iters=3,
-          max_timesteps=0, max_episodes=0, max_iters=0, 
+def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_name,
+          g_step=1, save_per_iter=100, g_optim_batchsize=64,
+          timesteps_per_batch=4096, clip_param=0.2, entcoeff=0.01, g_optim_epochs=4,
+          gamma=0.99, lam=0.95, adam_epsilon=1e-5, lr_schedule='linear',
+          g_stepsize=1e-4, d_stepsize=1e-4, 
+          max_timesteps=0,
           callback=None):
 
     nworkers = MPI.COMM_WORLD.Get_size()
@@ -139,7 +139,9 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, *,
     oldpi = policy_func("oldpi", ob_space, ac_space)
     atarg = tf.placeholder(dtype=tf.float32, shape=[None])  # Target advantage function (if applicable)
     ret = tf.placeholder(dtype=tf.float32, shape=[None])  # Empirical return
-
+    lrmult = tf.placeholder(name='lrmult', dtype=tf.float32, shape=[])  # learning rate multiplier, updated with schedule
+    clip_param = clip_param * lrmult  # Annealed cliping parameter epislon
+                    
     ob = U.get_placeholder_cached(name="ob")
     ac = pi.pdtype.sample_placeholder([None])
 
@@ -147,51 +149,65 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, *,
     ent = pi.pd.entropy()
     meankl = tf.reduce_mean(kloldnew)
     meanent = tf.reduce_mean(ent)
-    entbonus = entcoeff * meanent
+    pol_entpen = (-entcoeff) * meanent
+    # entbonus = entcoeff * meanent
 
-    vferr = tf.reduce_mean(tf.square(pi.vpred - ret))
+    
 
     ratio = tf.exp(pi.pd.logp(ac) - oldpi.pd.logp(ac))  # advantage * pnew / pold
-    surrgain = tf.reduce_mean(ratio * atarg)
+    # surrgain = tf.reduce_mean(ratio * atarg)
+    # surrogate from conservative policy iteration
+    surr1 = ratio * atarg 
+    surr2 = tf.clip_by_value(ratio, 1.0 - clip_param, 1.0 + clip_param) * atarg
+    # PPO's pessimistic surrogate (L^CLIP)
+    pol_surr = - tf.reduce_mean(tf.minimum(surr1, surr2))
+    vferr = tf.reduce_mean(tf.square(pi.vpred - ret))
+    total_loss = pol_surr + pol_entpen + vferr
 
-    optimgain = surrgain + entbonus
-    losses = [optimgain, meankl, entbonus, surrgain, meanent]
-    loss_names = ["optimgain", "meankl", "entloss", "surrgain", "entropy"]
+    # optimgain = surrgain + entbonus
+    # losses = [optimgain, meankl, entbonus, surrgain, meanent]
+    # loss_names = ["optimgain", "meankl", "entloss", "surrgain", "entropy"]
+    losses = [pol_surr, pol_entpen, vferr, meankl, meanent]
+    loss_names = ["pol_surr", "pol_entpen", "vf_loss", "kl", "ent"]
+    var_list = pi.get_trainable_variables()
+    
+    # dist = meankl
 
-    dist = meankl
-
-    all_var_list = pi.get_trainable_variables()
-    var_list = [v for v in all_var_list if v.name.startswith("pi/pol") or v.name.startswith("pi/logstd")]
-    vf_var_list = [v for v in all_var_list if v.name.startswith("pi/vff")]
+    # all_var_list = pi.get_trainable_variables()
+    # var_list = [v for v in all_var_list if v.name.startswith("pi/pol") or v.name.startswith("pi/logstd")]
+    # vf_var_list = [v for v in all_var_list if v.name.startswith("pi/vff")]
     # all_var_list = tf_util.get_trainable_vars("model")
     # var_list = [v for v in all_var_list if "/vf" not in v.name and "/q/" not in v.name]
     # vf_var_list = [v for v in all_var_list if "/pi" not in v.name and "/logstd" not in v.name]
 
-
-    assert len(var_list) == len(vf_var_list) + 1
+    g_adam = MpiAdam(var_list, epsilon=adam_epsilon)
     d_adam = MpiAdam(reward_giver.get_trainable_variables())
-    vfadam = MpiAdam(vf_var_list)
 
     get_flat = U.GetFlat(var_list)
     set_from_flat = U.SetFromFlat(var_list)
-    klgrads = tf.gradients(dist, var_list)
-    flat_tangent = tf.placeholder(dtype=tf.float32, shape=[None], name="flat_tan")
-    shapes = [var.get_shape().as_list() for var in var_list]
-    start = 0
-    tangents = []
-    for shape in shapes:
-        sz = U.intprod(shape)
-        tangents.append(tf.reshape(flat_tangent[start:start+sz], shape))
-        start += sz
-    gvp = tf.add_n([tf.reduce_sum(g*tangent) for (g, tangent) in zipsame(klgrads, tangents)])  # pylint: disable=E1111
-    fvp = U.flatgrad(gvp, var_list)
+    # klgrads = tf.gradients(dist, var_list)
+    # flat_tangent = tf.placeholder(dtype=tf.float32, shape=[None], name="flat_tan")
+    # shapes = [var.get_shape().as_list() for var in var_list]
+    # start = 0
+    # tangents = []
+    # for shape in shapes:
+    #     sz = U.intprod(shape)
+    #     tangents.append(tf.reshape(flat_tangent[start:start+sz], shape))
+    #     start += sz
+    # gvp = tf.add_n([tf.reduce_sum(g*tangent) for (g, tangent) in zipsame(klgrads, tangents)])  # pylint: disable=E1111
+    # fvp = U.flatgrad(gvp, var_list)
 
     assign_old_eq_new = U.function([], [], updates=[tf.assign(oldv, newv)
                                                     for (oldv, newv) in zipsame(oldpi.get_variables(), pi.get_variables())])
-    compute_losses = U.function([ob, ac, atarg], losses)
-    compute_lossandgrad = U.function([ob, ac, atarg], losses + [U.flatgrad(optimgain, var_list)])
-    compute_fvp = U.function([flat_tangent, ob, ac, atarg], fvp)
-    compute_vflossandgrad = U.function([ob, ret], U.flatgrad(vferr, vf_var_list))
+    # compute_losses = U.function([ob, ac, atarg], losses)
+    # compute_lossandgrad = U.function([ob, ac, atarg], losses + [U.flatgrad(optimgain, var_list)])
+    # compute_fvp = U.function([flat_tangent, ob, ac, atarg], fvp)
+    # compute_vflossandgrad = U.function([ob, ret], U.flatgrad(vferr, vf_var_list))
+    # summary = tf.summary.merge(tf.get_collection(tf.GraphKeys.SUMMARIES,scope="input_info")+tf.get_collection(tf.GraphKeys.SUMMARIES,scope="loss"))
+    lossandgrad = U.function([ob, ac, atarg, ret, lrmult],
+                                        [U.flatgrad(total_loss, var_list)] + losses)
+    compute_losses = U.function([ob, ac, atarg, ret, lrmult],
+                                            losses)
 
     @contextmanager
     def timed(msg):
@@ -214,8 +230,8 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, *,
     th_init = get_flat()
     MPI.COMM_WORLD.Bcast(th_init, root=0)
     set_from_flat(th_init)
+    g_adam.sync()
     d_adam.sync()
-    vfadam.sync()
     if rank == 0:
         print("Init param sum", th_init.sum(), flush=True)
 
@@ -231,11 +247,11 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, *,
     rewbuffer = deque(maxlen=40)  # rolling buffer for episode rewards
     true_rewbuffer = deque(maxlen=40)
 
-    assert sum([max_iters > 0, max_timesteps > 0, max_episodes > 0]) == 1
+    # assert sum([max_iters > 0, max_timesteps > 0, max_episodes > 0]) == 1
 
-    g_loss_stats = stats(loss_names)
-    d_loss_stats = stats(reward_giver.loss_name)
-    ep_stats = stats(["True_rewards", "Rewards", "Episode_length"])
+    # g_loss_stats = stats(loss_names)
+    # d_loss_stats = stats(reward_giver.loss_name)
+    # ep_stats = stats(["True_rewards", "Rewards", "Episode_length"])
 
     replay_buffer = {'transitions':[]}
 
@@ -245,10 +261,10 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, *,
         if callback: callback(locals(), globals())
         if max_timesteps and timesteps_so_far >= max_timesteps:
             break
-        elif max_episodes and episodes_so_far >= max_episodes:
-            break
-        elif max_iters and iters_so_far >= max_iters:
-            break
+        # elif max_episodes and episodes_so_far >= max_episodes:
+        #     break
+        # elif max_iters and iters_so_far >= max_iters:
+        #     break
 
         # Save model
         if rank == 0 and iters_so_far % save_per_iter == 0 and ckpt_dir is not None:
@@ -260,11 +276,18 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, *,
         if iters_so_far % 500 == 0 and iters_so_far != 0:
             env.set_max_time(2 * env.get_max_time())
 
+        if lr_schedule == 'constant':
+            cur_lrmult = 1.0
+        elif lr_schedule == 'linear':
+            cur_lrmult = max(1.0 - float(timesteps_so_far) / max_timesteps, 0)
+        else:
+            raise NotImplementedError
+
 
         logger.log("********** Iteration %i ************" % iters_so_far)
 
-        def fisher_vector_product(p):
-            return allmean(compute_fvp(p, *fvpargs)) + cg_damping * p
+        # def fisher_vector_product(p):
+        #     return allmean(compute_fvp(p, *fvpargs)) + cg_damping * p
 
         # ------------------ Update G ------------------
         logger.log("Optimizing Policy...")
@@ -286,63 +309,26 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, *,
 
             if hasattr(pi, "ob_rms"): pi.ob_rms.update(ob)  # update running mean/std for policy
 
-            args = seg["ob"], seg["ac"], atarg
-            fvpargs = [arr[::5] for arr in args]
+            g_dataset = Dataset(dict(ob=ob, ac=ac, atarg=atarg, vtarg=tdlamret), shuffle=True)
+            # set old parameter values to new parameter values
+            assign_old_eq_new()  
+            logger.log("Optimizing...")
+            logger.log(fmt_row(13, loss_names))
 
-            assign_old_eq_new()  # set old parameter values to new parameter values
-            with timed("computegrad"):
-                *lossbefore, g = compute_lossandgrad(*args)
-            lossbefore = allmean(np.array(lossbefore))
-            g = allmean(g)
-            if np.allclose(g, 0):
-                logger.log("Got zero gradient. not updating")
-            else:
-                with timed("cg"):
-                    stepdir = cg(fisher_vector_product, g, cg_iters=cg_iters, verbose=rank == 0)
-                assert np.isfinite(stepdir).all()
-                shs = .5*stepdir.dot(fisher_vector_product(stepdir))
-                lm = np.sqrt(shs / max_kl)
-                # logger.log("lagrange multiplier:", lm, "gnorm:", np.linalg.norm(g))
-                fullstep = stepdir / lm
-                expectedimprove = g.dot(fullstep)
-                surrbefore = lossbefore[0]
-                stepsize = 1.0
-                thbefore = get_flat()
-                for _ in range(10):
-                    thnew = thbefore + fullstep * stepsize
-                    set_from_flat(thnew)
-                    meanlosses = surr, kl, *_ = allmean(np.array(compute_losses(*args)))
-                    improve = surr - surrbefore
-                    logger.log("Expected: %.3f Actual: %.3f" % (expectedimprove, improve))
-                    if not np.isfinite(meanlosses).all():
-                        logger.log("Got non-finite value of losses -- bad!")
-                    elif kl > max_kl * 1.5:
-                        logger.log("violated KL constraint. shrinking step.")
-                    elif improve < 0:
-                        logger.log("surrogate didn't improve. shrinking step.")
-                    else:
-                        logger.log("Stepsize OK!")
-                        break
-                    stepsize *= .5
-                else:
-                    logger.log("couldn't compute a good step")
-                    set_from_flat(thbefore)
-                if nworkers > 1 and iters_so_far % 20 == 0:
-                    paramsums = MPI.COMM_WORLD.allgather((thnew.sum(), vfadam.getflat().sum()))  # list of tuples
-                    assert all(np.allclose(ps, paramsums[0]) for ps in paramsums[1:])
-            with timed("vf"):
-                for _ in range(vf_iters):
-                    for (mbob, mbret) in dataset.iterbatches((seg["ob"], seg["tdlamret"]),
-                                                             include_final_partial_batch=False, batch_size=128):
-                        if hasattr(pi, "ob_rms"):
-                            pi.ob_rms.update(mbob)  # update running mean/std for policy
-                        g = allmean(compute_vflossandgrad(mbob, mbret))
-                        vfadam.update(g, vf_stepsize)
+            # Here we do a bunch of optimization epochs over the data
+            for k in range(g_optim_epochs):
+                # list of tuples, each of which gives the loss for a minibatch
+                losses = []
+                for i, batch in enumerate(g_dataset.iterate_once(g_optim_batchsize)):
+                    grad, *newlosses = lossandgrad(batch["ob"], batch["ac"],
+                                                            batch["atarg"], batch["vtarg"], cur_lrmult,
+                                                           )
 
-        g_losses = meanlosses
-        for (lossname, lossval) in zip(loss_names, meanlosses):
-            logger.record_tabular(lossname, lossval)
-        logger.record_tabular("ev_tdlam_before", explained_variance(vpredbefore, tdlamret))
+                    g_adam.update(grad, g_stepsize * cur_lrmult)
+                    losses.append(newlosses)
+                logger.log(fmt_row(13, np.mean(losses, axis=0)))
+
+
 
         # ------------------ Update D ------------------
         logger.log("Optimizing Discriminator...")
@@ -475,27 +461,6 @@ def traj_1_generator(pi, env, horizon, stochastic):
             "ep_ret": cur_ep_ret, "ep_len": cur_ep_len}
     return traj
 
-def train(env, seed, policy_fn, reward_giver, expert_dataset,
-          g_step, d_step, d_stepsize, policy_entcoeff, timesteps_per_batch, num_timesteps, save_per_iter,
-          checkpoint_dir, task_name=None):
-
-    rank = MPI.COMM_WORLD.Get_rank()
-    if rank != 0:
-        logger.set_level(logger.DISABLED)
-    workerseed = seed + 10000 * MPI.COMM_WORLD.Get_rank()
-    set_global_seeds(workerseed)
-    env.seed(workerseed)
-    learn(env, policy_fn, reward_giver, expert_dataset, rank,
-                    g_step=g_step, d_step=d_step, d_stepsize=d_stepsize,
-                    entcoeff=policy_entcoeff,
-                    max_timesteps=num_timesteps,
-                    ckpt_dir=checkpoint_dir, 
-                    save_per_iter=save_per_iter,
-                    timesteps_per_batch=timesteps_per_batch,
-                    max_kl=0.01, cg_iters=10, cg_damping=0.1,
-                    gamma=0.995, lam=0.97,
-                    vf_iters=5, vf_stepsize=1e-3, 
-                    task_name=task_name)
 
 
 def main(args):
@@ -507,7 +472,7 @@ def main(args):
     env = DPEnv(C)
 
 
-    def policy_fn(name, ob_space, ac_space, reuse=False):
+    def policy_func(name, ob_space, ac_space, reuse=False):
         return MlpPolicy(name=name, ob_space=ob_space, ac_space=ac_space,
                                     reuse=reuse, hid_size=C.policy_hidden_size, num_hid_layers=2)
 
@@ -527,6 +492,7 @@ def main(args):
             os.makedirs(checkpoint_dir, exist_ok=True)
             C.to_yaml(osp.join(checkpoint_dir, "config.yaml"))
             logger.configure(dir=log_dir)
+
         if MPI.COMM_WORLD.Get_rank() != 0:
             logger.set_level(logger.DISABLED)
         else:
@@ -535,37 +501,37 @@ def main(args):
 
         env = bench.Monitor(env, logger.get_dir() and
                             osp.join(logger.get_dir(), "monitor.json"))
-        env.seed(C.seed)
 
 
         expert_dataset = Dset_transition(transitions = env.env.sample_expert_traj())
         ob_length = env.observation_space.shape[0] # shape of ob + act = shape of ob + next_ob
         reward_giver = Discriminator(ob_length, C.adversary_hidden_size, entcoeff=C.adversary_entcoeff)
+
+        rank = MPI.COMM_WORLD.Get_rank()
+        if rank != 0:
+            logger.set_level(logger.DISABLED)
+        workerseed = C.seed + 10000 * MPI.COMM_WORLD.Get_rank()
+        set_global_seeds(workerseed)
+        env.seed(workerseed)
         
-        train(env,
-              C.seed,
-              policy_fn,
-              reward_giver,
-              expert_dataset,
-              C.g_step,
-              C.d_step,
-              C.d_stepsize,
-              C.policy_entcoeff,
-              C.timesteps_per_batch,
-              C.num_timesteps,
-              C.save_per_iter,
-              checkpoint_dir,
-              task_name
-              )
-              
+
+        learn(env, policy_func, reward_giver, expert_dataset, rank, checkpoint_dir, task_name,
+                g_step=C.g_step, save_per_iter=C.save_per_iter, g_optim_batchsize=C.g_optim_batchsize,
+                timesteps_per_batch=C.timesteps_per_batch, clip_param=C.clip_param, entcoeff=C.entcoeff, g_optim_epochs=C.g_optim_epochs,
+                gamma=C.gamma, lam=C.lam, adam_epsilon=C.adam_epsilon, lr_schedule=C.lr_schedule,
+                g_stepsize=C.g_stepsize, d_stepsize=C.d_stepsize, 
+                max_timesteps=C.max_timesteps,
+                callback=None)
+
+
     elif args.task == 'evaluate':
         runner(env,
-               policy_fn,
+               policy_func,
                args.load_model_path,
                timesteps_per_batch=1024,
                number_trajs=20,
                stochastic_policy=args.stochastic_policy,
-               save=args.save_sample
+               save=args.save_sample,
                )
     env.close()
 

@@ -175,13 +175,13 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
 
     def step(self, action):
-        # norm_action has been normalized to [-1, 1]
-        unnorm_action = []
-        for ac_name, norm_ac in zip(actutor_seq, action):
-            L, H = joint_limit[ac_name]
-            unnorm_action.append(norm_ac*(H-L)/2. + (H+L)/2.)
+        # # norm_action has been normalized to [-1, 1]
+        # unnorm_action = []
+        # for ac_name, norm_ac in zip(actutor_seq, action):
+        #     L, H = joint_limit[ac_name]
+        #     unnorm_action.append(norm_ac*(H-L)/2. + (H+L)/2.)
             
-        self.do_simulation(unnorm_action, n_frames=int(500/self.policy_freq))
+        self.do_simulation(action, n_frames=int(500/self.policy_freq))
 
         self.update_target_frame()
         # reward_alive = 1.0

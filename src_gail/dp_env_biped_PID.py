@@ -18,6 +18,16 @@ from pyquaternion import Quaternion
 from transformations import quaternion_from_euler
 from box import Box
 
+actutor_seq = ["right_hip", "right_knee", "right_ankle", "left_hip", "left_knee", "left_ankle"]
+joint_limit = { "right_hip": [-1.2, 2.57],
+                "right_knee": [-3.14, 0],
+                "right_ankle": [-1.57, 1.57],
+                "left_hip": [-1.2, 2.57],
+                "left_knee": [-3.14, 0],
+                "left_ankle": [-1.57, 1.57]
+                }   
+
+
 def mass_center(model, sim):
     mass = np.expand_dims(model.body_mass, 1)
     xpos = sim.data.xipos
@@ -165,7 +175,13 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
 
     def step(self, action):
-        self.do_simulation(action, n_frames=int(500/self.policy_freq))
+        # norm_action has been normalized to [-1, 1]
+        unnorm_action = []
+        for ac_name, norm_ac in zip(actutor_seq, action):
+            L, H = joint_limit[ac_name]
+            unnorm_action.append(norm_ac*(H-L)/2. + (H+L)/2.)
+            
+        self.do_simulation(unnorm_action, n_frames=int(500/self.policy_freq))
 
         self.update_target_frame()
         # reward_alive = 1.0

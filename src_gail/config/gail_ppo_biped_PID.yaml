@@ -4,13 +4,13 @@ motion_folder: mujoco/motions
 xml_folder: mujoco/bipedal/envs/asset
 checkpoint_dir: checkpoint/
 # Env
-motion_file: biped_run.txt
+motion_file: biped_walk.txt
 env_file: bipedal_2d_PID.xml
 # Train
 seed: 0
-timesteps_per_batch: 1024
+timesteps_per_batch: 4096
 max_timesteps: 1e8
-save_per_iter: 50
+save_per_iter: 100
 pretrained_weight_path: null
 tensorboard_port: 6006
 gamma: 0.99
@@ -22,7 +22,7 @@ entcoeff: 0
 g_step: 1
 g_optim_epochs: 3
 g_optim_batchsize: 256
-g_stepsize: 1e-4
+g_stepsize: 3e-4
 num_hid_layers: 2
 policy_hidden_size: 100
 traj_limitation: -1

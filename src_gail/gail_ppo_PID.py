@@ -155,8 +155,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
     
 
     ratio = tf.exp(pi.pd.logp(ac) - oldpi.pd.logp(ac))  # advantage * pnew / pold
-    # surrgain = tf.reduce_mean(ratio * atarg)
-    # surrogate from conservative policy iteration
+
     surr1 = ratio * atarg 
     surr2 = tf.clip_by_value(ratio, 1.0 - clip_param, 1.0 + clip_param) * atarg
     # PPO's pessimistic surrogate (L^CLIP)
@@ -164,48 +163,29 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
     vferr = tf.reduce_mean(tf.square(pi.vpred - ret))
     total_loss = pol_surr + pol_entpen + vferr
 
-    # optimgain = surrgain + entbonus
-    # losses = [optimgain, meankl, entbonus, surrgain, meanent]
-    # loss_names = ["optimgain", "meankl", "entloss", "surrgain", "entropy"]
     losses = [pol_surr, pol_entpen, vferr, meankl, meanent]
     loss_names = ["pol_surr", "pol_entpen", "vf_loss", "kl", "ent"]
     var_list = pi.get_trainable_variables()
     
-    # dist = meankl
 
-    # all_var_list = pi.get_trainable_variables()
-    # var_list = [v for v in all_var_list if v.name.startswith("pi/pol") or v.name.startswith("pi/logstd")]
-    # vf_var_list = [v for v in all_var_list if v.name.startswith("pi/vff")]
-    # all_var_list = tf_util.get_trainable_vars("model")
-    # var_list = [v for v in all_var_list if "/vf" not in v.name and "/q/" not in v.name]
-    # vf_var_list = [v for v in all_var_list if "/pi" not in v.name and "/logstd" not in v.name]
 
     g_adam = MpiAdam(var_list, epsilon=adam_epsilon)
     d_adam = MpiAdam(reward_giver.get_trainable_variables())
 
     get_flat = U.GetFlat(var_list)
     set_from_flat = U.SetFromFlat(var_list)
-    # klgrads = tf.gradients(dist, var_list)
-    # flat_tangent = tf.placeholder(dtype=tf.float32, shape=[None], name="flat_tan")
-    # shapes = [var.get_shape().as_list() for var in var_list]
-    # start = 0
-    # tangents = []
-    # for shape in shapes:
-    #     sz = U.intprod(shape)
-    #     tangents.append(tf.reshape(flat_tangent[start:start+sz], shape))
-    #     start += sz
-    # gvp = tf.add_n([tf.reduce_sum(g*tangent) for (g, tangent) in zipsame(klgrads, tangents)])  # pylint: disable=E1111
-    # fvp = U.flatgrad(gvp, var_list)
+
 
     assign_old_eq_new = U.function([], [], updates=[tf.assign(oldv, newv)
                                                     for (oldv, newv) in zipsame(oldpi.get_variables(), pi.get_variables())])
-    # compute_losses = U.function([ob, ac, atarg], losses)
-    # compute_lossandgrad = U.function([ob, ac, atarg], losses + [U.flatgrad(optimgain, var_list)])
-    # compute_fvp = U.function([flat_tangent, ob, ac, atarg], fvp)
-    # compute_vflossandgrad = U.function([ob, ret], U.flatgrad(vferr, vf_var_list))
-    # summary = tf.summary.merge(tf.get_collection(tf.GraphKeys.SUMMARIES,scope="input_info")+tf.get_collection(tf.GraphKeys.SUMMARIES,scope="loss"))
+
     lossandgrad = U.function([ob, ac, atarg, ret, lrmult],
                                         [U.flatgrad(total_loss, var_list)] + losses)
+
+    clipped_ratio = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), clip_param)))
+    ac_std = tf.reduce_mean(pi.pd.std)
+    compute_clipped_ratio = U.function([ob, ac, atarg, ret, lrmult],[clipped_ratio])
+    compute_ac_std = U.function([ob, ac, atarg, ret, lrmult],[ac_std])
     compute_losses = U.function([ob, ac, atarg, ret, lrmult],
                                             losses)
 
@@ -247,11 +227,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
     rewbuffer = deque(maxlen=40)  # rolling buffer for episode rewards
     true_rewbuffer = deque(maxlen=40)
 
-    # assert sum([max_iters > 0, max_timesteps > 0, max_episodes > 0]) == 1
 
-    # g_loss_stats = stats(loss_names)
-    # d_loss_stats = stats(reward_giver.loss_name)
-    # ep_stats = stats(["True_rewards", "Rewards", "Episode_length"])
 
     replay_buffer = {'transitions':[]}
 
@@ -261,10 +237,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
         if callback: callback(locals(), globals())
         if max_timesteps and timesteps_so_far >= max_timesteps:
             break
-        # elif max_episodes and episodes_so_far >= max_episodes:
-        #     break
-        # elif max_iters and iters_so_far >= max_iters:
-        #     break
+
 
         # Save model
         if rank == 0 and iters_so_far % save_per_iter == 0 and ckpt_dir is not None:
@@ -286,17 +259,14 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
 
         logger.log("********** Iteration %i ************" % iters_so_far)
 
-        # def fisher_vector_product(p):
-        #     return allmean(compute_fvp(p, *fvpargs)) + cg_damping * p
+
 
         # ------------------ Update G ------------------
         logger.log("Optimizing Policy...")
         for _ in range(g_step):
             with timed("sampling"):
                 seg = seg_gen.__next__()
-            # print('rewards', seg['rew'])
             add_vtarg_and_adv(seg, gamma, lam)
-            # ob, ac, atarg, ret, td1ret = map(np.concatenate, (obs, acs, atargs, rets, td1rets))
             ob, ac, atarg, tdlamret = seg["ob"], seg["ac"], seg["adv"], seg["tdlamret"]
             transitions = seg["transitions"]
 
@@ -309,7 +279,9 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
 
             if hasattr(pi, "ob_rms"): pi.ob_rms.update(ob)  # update running mean/std for policy
 
-            g_dataset = Dataset(dict(ob=ob, ac=ac, atarg=atarg, vtarg=tdlamret), shuffle=True)
+            masked_ob = ob.copy()
+            masked_ob[:,0] = 0 # mask out root_x
+            g_dataset = Dataset(dict(ob=masked_ob, ac=ac, atarg=atarg, vtarg=tdlamret), shuffle=True)
             # set old parameter values to new parameter values
             assign_old_eq_new()  
             logger.log("Optimizing...")
@@ -323,17 +295,18 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
                     grad, *newlosses = lossandgrad(batch["ob"], batch["ac"],
                                                             batch["atarg"], batch["vtarg"], cur_lrmult,
                                                            )
-
                     g_adam.update(grad, g_stepsize * cur_lrmult)
                     losses.append(newlosses)
                 logger.log(fmt_row(13, np.mean(losses, axis=0)))
-
+                all_data = g_dataset.all_data()
+            
+            logger.record_tabular("MeanClippedRatio", compute_clipped_ratio(all_data["ob"], all_data["ac"], all_data["atarg"], all_data["vtarg"], cur_lrmult)[0])
+            logger.record_tabular("MeanAcStd", compute_ac_std(all_data["ob"], all_data["ac"], all_data["atarg"], all_data["vtarg"], cur_lrmult)[0])
 
 
         # ------------------ Update D ------------------
         logger.log("Optimizing Discriminator...")
         logger.log(fmt_row(13, reward_giver.loss_name))
-        # batch_size = 1024
         batch_size = 256
         d_losses = []  # list of tuples, each of which gives the loss for a minibatch
 
@@ -363,17 +336,21 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
         lenbuffer.extend(lens)
         rewbuffer.extend(rews)
 
+
+        
+
         logger.record_tabular("EpLenMean", np.mean(lenbuffer))
         logger.record_tabular("EpRewMean", np.mean(rewbuffer))
         logger.record_tabular("EpTrueRewMean", np.mean(true_rewbuffer))
-        logger.record_tabular("EpThisIter", len(lens))
+        # logger.record_tabular("EpThisIter", len(lens))
         episodes_so_far += len(lens)
-        timesteps_so_far += sum(lens) * g_step
+        timesteps_so_far += sum(lens) * g_step * g_optim_epochs
         iters_so_far += 1
 
-        logger.record_tabular("EpisodesSoFar", episodes_so_far)
+        # logger.record_tabular("EpisodesSoFar", episodes_so_far)
+        logger.record_tabular("ItersSoFar", iters_so_far)
         logger.record_tabular("TimestepsSoFar", timesteps_so_far)
-        logger.record_tabular("TimeElapsed", time.time() - tstart)
+        # logger.record_tabular("TimeElapsed", time.time() - tstart)
 
         if rank == 0:
             logger.dump_tabular()
@@ -474,7 +451,7 @@ def main(args):
 
     def policy_func(name, ob_space, ac_space, reuse=False):
         return MlpPolicy(name=name, ob_space=ob_space, ac_space=ac_space,
-                                    reuse=reuse, hid_size=C.policy_hidden_size, num_hid_layers=2)
+                                    reuse=reuse, hid_size=C.policy_hidden_size, num_hid_layers=C.num_hid_layers)
 
     if args.task == 'train':
         import logging

@@ -55,7 +55,9 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
 
     while True:
         prevac = ac
-        ac, vpred = pi.act(stochastic=stochastic, ob=ob)
+        masked_ob = ob.copy()
+        masked_ob[0] = 0 # mask root_x
+        ac, vpred = pi.act(stochastic=stochastic, ob=masked_ob)
         # Slight weirdness here because we need value function at time T
         # before returning segment [0, T-1] so we get the correct
         # terminal value
@@ -63,14 +65,15 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
             yield {"ob": obs, "next_ob": next_obs, "transitions":transitions, "rew": rews, "vpred": vpreds, "new": news,
                    "ac": acs, "prevac": prevacs, "nextvpred": vpred * (1 - new),
                    "ep_rets": ep_rets, "ep_lens": ep_lens, "ep_true_rets": ep_true_rets}
-            _, vpred = pi.act(stochastic=stochastic, ob=ob)
+            _, vpred = pi.act(stochastic=stochastic, ob=masked_ob)
             # Be careful!!! if you change the downstream algorithm to aggregate
             # several of these batches, then be sure to do a deepcopy
             ep_rets = []
             ep_true_rets = []
             ep_lens = []
         i = t % horizon
-        obs[i] = ob
+
+        obs[i] = masked_ob
         vpreds[i] = vpred
         news[i] = new
         acs[i] = ac

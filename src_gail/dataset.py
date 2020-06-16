@@ -63,6 +63,12 @@ class Dataset(object):
             yield self.next_batch(batch_size)
         self._next_id = 0
 
+    def all_data(self):
+        data_map = dict()
+        for key in self.data_map:
+            data_map[key] = self.data_map[key][:]
+        return data_map
+
     def subset(self, num_elements, shuffle=True):
         """
         Return a subset of the current dataset

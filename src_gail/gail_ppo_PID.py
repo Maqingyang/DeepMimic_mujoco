@@ -279,9 +279,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
 
             if hasattr(pi, "ob_rms"): pi.ob_rms.update(ob)  # update running mean/std for policy
 
-            masked_ob = ob.copy()
-            masked_ob[:,0] = 0 # mask out root_x
-            g_dataset = Dataset(dict(ob=masked_ob, ac=ac, atarg=atarg, vtarg=tdlamret), shuffle=True)
+            g_dataset = Dataset(dict(ob=ob, ac=ac, atarg=atarg, vtarg=tdlamret), shuffle=True)
             # set old parameter values to new parameter values
             assign_old_eq_new()  
             logger.log("Optimizing...")

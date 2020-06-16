@@ -406,6 +406,7 @@ def traj_1_generator(pi, env, horizon, stochastic):
     new = True  # marks if we're on first timestep of an episode
 
     ob = env.reset()
+    ob[0] = 0
     cur_ep_ret = 0  # return in current episode
     cur_ep_len = 0  # len of current episode
 
@@ -422,6 +423,7 @@ def traj_1_generator(pi, env, horizon, stochastic):
         acs.append(ac)
 
         ob, rew, new, _ = env.step(ac)
+        ob[0] = 0
         env.render()
         rews.append(rew)
 

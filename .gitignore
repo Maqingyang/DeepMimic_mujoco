@@ -1,4 +1,10 @@
 render/
+checkpoint/
+venv/
+*.mp4
+*.svg
+*.png
+*.m4v
 
 .vscode/
 *.pyc

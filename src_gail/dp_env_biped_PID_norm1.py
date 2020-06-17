@@ -1,3 +1,6 @@
+"""
+action are normalized to [-1, 1], use mean to shift and deviation to scale the range
+"""
 #!/usr/bin/env python3
 import numpy as np
 import math

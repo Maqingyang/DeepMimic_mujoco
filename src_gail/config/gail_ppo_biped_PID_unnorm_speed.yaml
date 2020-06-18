@@ -6,6 +6,7 @@ checkpoint_dir: checkpoint/
 # Env
 motion_file: biped_walk.txt
 env_file: bipedal_2d_PID.xml
+target_root_x_speed: 2
 # Train
 seed: 0
 timesteps_per_batch: 1024

@@ -463,6 +463,7 @@ def main(args):
 
         gym.logger.setLevel(logging.INFO)
         save_name = str(datetime.datetime.now().strftime("%y%m%d-%H%M%S"))
+        save_name += "-%s" % ("norm1")
         save_name += "-%s" % osp.basename(args.config).split('.')[0]
         checkpoint_dir = osp.join(C.checkpoint_dir, save_name)
         log_dir = osp.join(checkpoint_dir, "log")

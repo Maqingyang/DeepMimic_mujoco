@@ -39,6 +39,8 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
     cur_ep_len = 0
     cur_ep_speed_ret = 0
     cur_ep_speed_rets = []
+    cur_ep_disc_ret = 0
+    cur_ep_disc_rets = []
     ep_rets = []
     ep_lens = []
 
@@ -64,12 +66,13 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
         if t > 0 and t % horizon == 0:
             yield {"ob": obs, "next_ob": next_obs, "transitions":transitions, "rew": rews, "vpred": vpreds, "new": news,
                    "ac": acs, "prevac": prevacs, "nextvpred": vpred * (1 - new),
-                   "ep_rets": ep_rets, "ep_lens": ep_lens, "cur_ep_speed_rets": cur_ep_speed_rets}
+                   "ep_rets": ep_rets, "ep_lens": ep_lens, "cur_ep_speed_rets": cur_ep_speed_rets, "cur_ep_disc_rets":cur_ep_disc_rets}
             _, vpred = pi.act(stochastic=stochastic, ob=masked_ob)
             # Be careful!!! if you change the downstream algorithm to aggregate
             # several of these batches, then be sure to do a deepcopy
             ep_rets = []
             cur_ep_speed_rets = []
+            cur_ep_disc_rets = []
             ep_lens = []
         i = t % horizon
 
@@ -98,13 +101,16 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
 
         cur_ep_ret += d_rew
         cur_ep_speed_ret += speed_rew
+        cur_ep_disc_ret += 10 * reward_giver.get_reward(transition) 
         cur_ep_len += 1
         if new:
             ep_rets.append(cur_ep_ret)
             cur_ep_speed_rets.append(cur_ep_speed_ret)
+            cur_ep_disc_rets.append(cur_ep_disc_ret)
             ep_lens.append(cur_ep_len)
             cur_ep_ret = 0
             cur_ep_speed_ret = 0
+            cur_ep_disc_ret = 0
             cur_ep_len = 0
             ob = env.reset()
         t += 1
@@ -229,6 +235,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
     lenbuffer = deque(maxlen=40)  # rolling buffer for episode lengths
     rewbuffer = deque(maxlen=40)  # rolling buffer for episode rewards
     true_rewbuffer = deque(maxlen=40)
+    disc_rewbuffer = deque(maxlen=40)
 
 
 
@@ -326,23 +333,24 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
             d_losses.append(newlosses)
         logger.log(fmt_row(13, np.mean(d_losses, axis=0)))
 
-        lrlocal = (seg["ep_lens"], seg["ep_rets"], seg["cur_ep_speed_rets"])  # local values
+        lrlocal = (seg["ep_lens"], seg["ep_rets"], seg["cur_ep_speed_rets"], seg["cur_ep_disc_rets"])  # local values
         listoflrpairs = MPI.COMM_WORLD.allgather(lrlocal)  # list of tuples
 
         def flatten_lists(listoflists):
             return [el for list_ in listoflists for el in list_]
 
-        lens, rews, true_rets = map(flatten_lists, zip(*listoflrpairs))
+        lens, rews, true_rets, disc_rets = map(flatten_lists, zip(*listoflrpairs))
         true_rewbuffer.extend(true_rets)
         lenbuffer.extend(lens)
         rewbuffer.extend(rews)
-
+        disc_rewbuffer.extend(disc_rets)
 
         
 
         logger.record_tabular("EpLenMean", np.mean(lenbuffer))
         logger.record_tabular("EpRewMean", np.mean(rewbuffer))
         logger.record_tabular("EpTrueRewMean", np.mean(true_rewbuffer))
+        logger.record_tabular("EpDiscRewMean", np.mean(disc_rewbuffer))
         # logger.record_tabular("EpThisIter", len(lens))
         episodes_so_far += len(lens)
         timesteps_so_far += sum(lens) * g_step * g_optim_epochs
@@ -419,6 +427,7 @@ def traj_1_generator(pi, env, horizon, stochastic):
     while True:
         ac, vpred = pi.act(stochastic=stochastic, ob=ob)
         obs.append(ob)
+        print("root x vel", ob[9])
         news.append(new)
         acs.append(ac)
 

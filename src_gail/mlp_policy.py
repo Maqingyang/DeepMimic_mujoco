@@ -61,11 +61,16 @@ class MlpPolicy(object):
         ac = U.switch(stochastic, self.pd.sample(), self.pd.mode())
         self.ac = ac
         self._act = U.function([stochastic, ob], [ac, self.vpred])
+        self._value = U.function([ob], [self.vpred])
 
     def act(self, stochastic, ob):
         ac1, vpred1 = self._act(stochastic, ob[None])
         return ac1[0], vpred1[0]
 
+    def value(self, ob):
+        vpred1 = self._value(ob[None])
+        return vpred1[0]
+        
     def get_variables(self):
         return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, self.scope)
 
@@ -74,3 +79,4 @@ class MlpPolicy(object):
 
     def get_initial_state(self):
         return []
+

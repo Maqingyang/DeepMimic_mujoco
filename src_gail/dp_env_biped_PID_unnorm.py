@@ -191,10 +191,12 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         reward = reward_obs
 
         # info = dict(reward_obs=reward_obs, reward_acs=reward_acs, reward_forward=reward_forward)
-        info = dict()
+        info = {}
 
         observation = self._get_obs()
-        done = self.is_done()
+        done, early_termination = self.is_done()
+
+        info["early_termination"] = early_termination
 
         return observation, reward, done, info
 
@@ -202,10 +204,10 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         mass = np.expand_dims(self.model.body_mass, 1)
         xpos = self.sim.data.xipos
         z_com = (np.sum(mass * xpos, 0) / np.sum(mass))[2] # bipedal mass center at 0.7937
-        done = bool((z_com < 0.4) or (z_com > 1.0))
-        if self.data.time > 10 and self.is_gail:
+        done = early_termination = bool((z_com < 0.4) or (z_com > 1.0))
+        if self.data.time > self.max_time and self.is_gail:
             done = True
-        return done
+        return done, early_termination
 
     def set_max_time(self, t):
         self.max_time = t

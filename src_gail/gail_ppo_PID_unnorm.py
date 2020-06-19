@@ -49,6 +49,7 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
     true_rews = np.zeros(horizon, 'float32')
     rews = np.zeros(horizon, 'float32')
     vpreds = np.zeros(horizon, 'float32')
+    nextvpreds = np.zeros(horizon, 'float32')
     news = np.zeros(horizon, 'int32')
     acs = np.array([ac for _ in range(horizon)])
     prevacs = acs.copy()
@@ -63,7 +64,7 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
         # terminal value
         if t > 0 and t % horizon == 0:
             yield {"ob": obs, "next_ob": next_obs, "transitions":transitions, "rew": rews, "vpred": vpreds, "new": news,
-                   "ac": acs, "prevac": prevacs, "nextvpred": vpred * (1 - new),
+                   "ac": acs, "prevac": prevacs, "nextvpred": vpred * (1 - new),"nextvpreds": nextvpreds,
                    "ep_rets": ep_rets, "ep_lens": ep_lens, "ep_true_rets": ep_true_rets}
             _, vpred = pi.act(stochastic=stochastic, ob=masked_ob)
             # Be careful!!! if you change the downstream algorithm to aggregate
@@ -80,12 +81,16 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
         prevacs[i] = prevac
 
         ob_len = len(ob)
-        next_ob, true_rew, new, _ = env.step(ac)
+        next_ob, true_rew, new, info = env.step(ac)
+        masked_next_ob = next_ob.copy()
+        masked_next_ob[0] = 0 # mask root_x
+        if info["early_termination"] != True:
+            nextvpreds[i] = pi.value(masked_next_ob)
+
         pos_0 = ob[:ob_len//2].copy()
         pos_1 = next_ob[:ob_len//2].copy()
         pos_1[0] -= pos_0[0]
         pos_0[0] = 0
-
         transition = np.concatenate([pos_0, pos_1])
         transitions[i] = transition
         d_rew = 10 * reward_giver.get_reward(transition)
@@ -112,13 +117,15 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
 def add_vtarg_and_adv(seg, gamma, lam):
     new = np.append(seg["new"], 0)  # last element is only used for last vtarg, but we already zeroed it if last new = 1
     vpred = np.append(seg["vpred"], seg["nextvpred"])
+    nexvpreds = seg["nextvpreds"]
     T = len(seg["rew"])
     seg["adv"] = gaelam = np.empty(T, 'float32')
     rew = seg["rew"]
     lastgaelam = 0
     for t in reversed(range(T)):
         nonterminal = 1-new[t+1]
-        delta = rew[t] + gamma * vpred[t+1] * nonterminal - vpred[t]
+        # delta = rew[t] + gamma * vpred[t+1] * nonterminal - vpred[t]
+        delta = rew[t] + gamma * nexvpreds[t] - vpred[t]
         gaelam[t] = lastgaelam = delta + gamma * lam * nonterminal * lastgaelam
     seg["tdlamret"] = seg["adv"] + seg["vpred"]
 

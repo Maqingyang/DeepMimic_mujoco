@@ -66,7 +66,10 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.is_gail = C.is_gail
         self.init_time = 0
         self.max_time = 1
-        self.target_root_x_speed = C.target_root_x_speed
+        self.target_root_x_speed_lower_bound = C.target_root_x_speed_lower_bound
+        self.target_root_x_speed_higher_bound = C.target_root_x_speed_higher_bound
+        self.target_root_x_speed = np.random.uniform(self.target_root_x_speed_lower_bound, self.target_root_x_speed_higher_bound)
+
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
 
         cymj.set_pid_control(self.sim.model, self.sim.data)
@@ -81,7 +84,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         target_vel = self.target_vel
         
         if self.is_gail:
-            return np.concatenate((position, velocity)) 
+            return np.concatenate((position, velocity, [self.target_root_x_speed])) 
 
         return np.concatenate((position, velocity, target_config, target_vel))
 
@@ -241,6 +244,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return self.sim.data.time
 
     def reset_model(self):
+        self.target_root_x_speed = np.random.uniform(self.target_root_x_speed_lower_bound, self.target_root_x_speed_higher_bound)
         self.reference_state_init()
         qpos = self.target_config
         qvel = self.target_vel

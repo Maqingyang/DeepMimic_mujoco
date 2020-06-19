@@ -110,7 +110,6 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def get_joint_vel(self):
         data = self.sim.data
-        print(data.qvel)
         return data.qvel
 
 
@@ -142,7 +141,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         curr_root_x_speed = self.get_joint_vel()[0]
         err_speed = np.square(curr_root_x_speed - self.target_root_x_speed)
         # reward_config = math.exp(-self.scale_err * self.scale_pose * err_configs)
-        reward_speed = np.exp(-0.1*err_speed)
+        reward_speed = np.exp(-10*err_speed)
 
         return reward_speed
 
@@ -175,7 +174,8 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         ratio = 1 - (curr_time % self.mocap_dt) / self.mocap_dt
         pos_1 = lerp(self.mocap.data_config[idx_curr],self.mocap.data_config[idx_curr + 1],ratio).copy()
 
-        pos_1[0] -= pos_0[0]
+        # pos_1[0] -= pos_0[0]
+        pos_1[0] = 0
         pos_0[0] = 0
 
         return np.concatenate([pos_0,pos_1])

@@ -63,7 +63,6 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.scale_err = 1.0
 
         self.curr_clip_idx = 0
-        self.reference_state_init()
         self.idx_curr = -1
         self.idx_tmp_count = -1
         self.policy_freq = 25
@@ -77,15 +76,15 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
 
         cymj.set_pid_control(self.sim.model, self.sim.data)
-        # self.viewer = MjViewer(self.sim)
+        self.viewer = MjViewer(self.sim)
         utils.EzPickle.__init__(self)
+
+
 
     def _get_obs(self):
         position = self.sim.data.qpos.flat.copy()
         velocity = self.sim.data.qvel.flat.copy()
-        ## add mocap data as additional observation
-        target_config = self.target_config
-        target_vel = self.target_vel
+
         
         if self.is_gail:
             return np.concatenate((position, velocity, [self.target_root_x_speed])) 
@@ -146,7 +145,6 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             
         self.do_simulation(action, n_frames=int(500/self.policy_freq))
 
-        self.update_target_frame()
         reward_obs = self.calc_speed_reward()
 
         reward = reward_obs
@@ -183,8 +181,8 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return self.sim.data.time
 
     def reference_state_init(self):
-        curr_clip_idx = np.random.randint(self.num)
-        mocap_period = self.mocap.multi_clip_data[sf.curr_clip_idx]["period"]
+        curr_clip_idx = np.random.randint(self.num_clip)
+        mocap_period = self.mocap.multi_clip_data[curr_clip_idx]["period"]
         mocap_dt = self.mocap.multi_clip_data[curr_clip_idx]["dt"]
         mocap_config = self.mocap.multi_clip_data[curr_clip_idx]["config"]
         mocap_vel = self.mocap.multi_clip_data[curr_clip_idx]["vel"]
@@ -218,8 +216,8 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
 
     def sample_1_expert_traj(self):
-        curr_clip_idx = np.random.randint(self.num)
-        mocap_period = self.mocap.multi_clip_data[sf.curr_clip_idx]["period"]
+        curr_clip_idx = np.random.randint(self.num_clip)
+        mocap_period = self.mocap.multi_clip_data[curr_clip_idx]["period"]
         mocap_dt = self.mocap.multi_clip_data[curr_clip_idx]["dt"]
         mocap_config = self.mocap.multi_clip_data[curr_clip_idx]["config"]
         mocap_vel = self.mocap.multi_clip_data[curr_clip_idx]["vel"]
@@ -227,13 +225,13 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         interval = np.clip(1+0.3*np.random.randn(), 1e-3, 2) * 1./self.policy_freq
 
         curr_time = np.random.uniform(0, mocap_period-interval)
-        idx_curr = int(curr_time // self.mocap_dt)  
+        idx_curr = int(curr_time // mocap_dt)  
         ratio = 1 - (curr_time % mocap_dt) / mocap_dt
         pos_0 = lerp(mocap_config[idx_curr],mocap_config[idx_curr + 1],ratio).copy()
 
         curr_time += interval        
         idx_curr = int(curr_time // mocap_dt)  
-        ratio = 1 - (curr_time % mocap_dt) / self.mocap_dt
+        ratio = 1 - (curr_time % mocap_dt) / mocap_dt
         pos_1 = lerp(mocap_config[idx_curr],mocap_config[idx_curr + 1],ratio).copy()
 
         pos_1[0] = 0
@@ -252,7 +250,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
 
 if __name__ == "__main__":
-    C = Box.from_yaml(filename="config/gail_ppo_biped_PID_unnorm_speed.yaml")
+    C = Box.from_yaml(filename="config/gail_ppo_biped_PID_multiClip.yaml")
     env = DPEnv(C)
     env.reset_model()
 

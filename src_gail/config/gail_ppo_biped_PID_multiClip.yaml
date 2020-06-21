@@ -1,0 +1,38 @@
+# io
+motion_folder: mujoco/motions
+xml_folder: mujoco/bipedal/envs/asset
+checkpoint_dir: checkpoint/
+# Env
+motion_file_list: [biped_walk.txt, biped_run.txt]
+env_file: bipedal_2d_PID.xml
+target_root_x_speed_lower_bound: 0.5
+target_root_x_speed_higher_bound: 3
+# Train
+seed: 0
+timesteps_per_batch: 1024
+max_timesteps: 1e8
+save_per_iter: 100
+pretrained_weight_path: null
+tensorboard_port: 6006
+gamma: 0.99
+lam: 0.95
+adam_epsilon: 1e-5
+# Model
+clip_param: 0.2
+entcoeff: 0
+g_step: 1
+g_optim_epochs: 3
+g_optim_batchsize: 256
+g_stepsize: 1e-4
+num_hid_layers: 2
+policy_hidden_size: 100
+traj_limitation: -1
+lr_schedule: "constant"
+# GAIL
+is_gail: true
+expert_path: null
+adversary_hidden_size: 100
+adversary_entcoeff: 1e-3
+d_stepsize: 1e-5
+
+

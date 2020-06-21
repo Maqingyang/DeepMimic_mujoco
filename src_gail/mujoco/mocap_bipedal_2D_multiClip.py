@@ -7,6 +7,8 @@ import numpy as np
 from os import getcwd,chdir
 import sys
 sys.path.append(getcwd())
+sys.path.append("/home/maze/project/DeepMimic_mujoco/src_gail")
+
 from pyquaternion import Quaternion
 from mujoco.mocap_util import align_position, align_rotation
 from mujoco.mocap_util import BIPEDAL_JOINTS_ORDER, BIPEDAL_JOINTS_DOF, BODY_DEFS
@@ -22,7 +24,7 @@ class MocapDM(object):
         self.multi_clip_data = []
 
     def load_mocap(self, filepath_list):
-        for file_path in filepath_list:
+        for filepath in filepath_list:
             self.read_data(filepath)
         
 
@@ -157,8 +159,7 @@ class MocapDM(object):
         sim = MjSim(model)
         viewer = MjViewer(sim)
 
-        self.read_raw_data(mocap_filepath)
-        self.convert_raw_data()
+        self.read_data(mocap_filepath)
 
         from time import sleep
 
@@ -169,7 +170,7 @@ class MocapDM(object):
         
         while True:
             print(data_vel)
-            for k in range(len(raw_data)):
+            for k in range(len(data_vel)):
                 tmp_val = data_config[k]
                 tmp_vel = data_vel[k]
                 sim_state = sim.get_state()
@@ -179,6 +180,7 @@ class MocapDM(object):
                 # sim_state.qpos[:3] +=  phase_offset[:]
                 sim.set_state(sim_state)
                 sim.forward()
+                viewer.render()
                 # for i in range(int(durations[0]/0.002)):
                 #     sim.step()
                 #     viewer.render()
@@ -190,4 +192,4 @@ class MocapDM(object):
 if __name__ == "__main__":
     test = MocapDM()
     curr_path = getcwd()
-    test.play(curr_path + "/mujoco/motions/biped_run.txt")
+    test.play(curr_path + "/mujoco/motions/biped_walk.txt")

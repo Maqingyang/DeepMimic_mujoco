@@ -82,8 +82,7 @@ class MocapDM(object):
 
                 all_states.append(state)
 
-        curr_clip_data['dt'] = dt
-        curr_clip_data['durations'] = durations
+
 
         data_vel = []
         data_config = []
@@ -142,9 +141,13 @@ class MocapDM(object):
             data_config.append(np.array(tmp_pos))
         data_vel[0] = data_vel[len(all_states)-1] # the first frame vel same as the last
         
+        curr_clip_data['dt'] = dt
+        curr_clip_data['durations'] = durations
         curr_clip_data["config"] = data_config
         curr_clip_data["vel"] = data_vel
-
+        curr_clip_data["data_len"] = len(all_states)
+        curr_clip_data["period"] = (len(all_states)-1)*dt
+        
         self.multi_clip_data.append(curr_clip_data)
         
     def play(self, mocap_filepath):

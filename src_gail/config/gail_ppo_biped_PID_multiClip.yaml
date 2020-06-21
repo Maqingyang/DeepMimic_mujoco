@@ -5,12 +5,12 @@ checkpoint_dir: checkpoint/
 # Env
 motion_file_list: [biped_walk.txt, biped_run.txt]
 env_file: bipedal_2d_PID.xml
-target_root_x_speed_lower_bound: 0.5
-target_root_x_speed_higher_bound: 5
+target_root_x_speed_lower_bound: 1.5
+target_root_x_speed_higher_bound: 5.
 # Train
 seed: 0
 timesteps_per_batch: 1024
-max_timesteps: 1e8
+max_timesteps: 2e8
 save_per_iter: 100
 pretrained_weight_path: null
 tensorboard_port: 6006

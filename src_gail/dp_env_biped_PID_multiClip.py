@@ -71,7 +71,6 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.max_time = 1
         self.target_root_x_speed_lower_bound = C.target_root_x_speed_lower_bound
         self.target_root_x_speed_higher_bound = C.target_root_x_speed_higher_bound
-        self.target_root_x_speed = np.random.uniform(self.target_root_x_speed_lower_bound, self.target_root_x_speed_higher_bound)
 
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
 
@@ -136,15 +135,26 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return reward_speed
 
 
-
-            
+    def update_target_speed(self):
+        lower_bound = self.target_root_x_speed_lower_bound
+        higher_bound = self.target_root_x_speed_higher_bound
+        time_in_period = (self.data.time + float(self.curr_clip_idx == 1) * 7) % 15
+        if time_in_period < 2:
+            self.target_root_x_speed = lower_bound
+        elif time_in_period < 7:
+            self.target_root_x_speed = (time_in_period-2)/(7-2)*(higher_bound-lower_bound) + lower_bound
+        elif time_in_period < 10:
+            self.target_root_x_speed = higher_bound
+        elif time_in_period < 15:
+            self.target_root_x_speed = higher_bound - (time_in_period-10)/(7-2)*(higher_bound-lower_bound)
+        
 
 
     def step(self, action):
 
             
         self.do_simulation(action, n_frames=int(500/self.policy_freq))
-
+        self.update_target_speed()
         reward_obs = self.calc_speed_reward()
 
         reward = reward_obs
@@ -181,11 +191,11 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return self.sim.data.time
 
     def reference_state_init(self):
-        curr_clip_idx = np.random.randint(self.num_clip)
-        mocap_period = self.mocap.multi_clip_data[curr_clip_idx]["period"]
-        mocap_dt = self.mocap.multi_clip_data[curr_clip_idx]["dt"]
-        mocap_config = self.mocap.multi_clip_data[curr_clip_idx]["config"]
-        mocap_vel = self.mocap.multi_clip_data[curr_clip_idx]["vel"]
+        self.curr_clip_idx = np.random.randint(self.num_clip)
+        mocap_period = self.mocap.multi_clip_data[self.curr_clip_idx]["period"]
+        mocap_dt = self.mocap.multi_clip_data[self.curr_clip_idx]["dt"]
+        mocap_config = self.mocap.multi_clip_data[self.curr_clip_idx]["config"]
+        mocap_vel = self.mocap.multi_clip_data[self.curr_clip_idx]["vel"]
 
         curr_time = np.random.uniform(0, mocap_period)
         init_time = curr_time
@@ -200,8 +210,10 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.set_state(qpos, qvel)
 
     def reset_model(self):
-        self.target_root_x_speed = np.random.uniform(self.target_root_x_speed_lower_bound, self.target_root_x_speed_higher_bound)
         self.reference_state_init()
+        # self.target_root_x_speed = np.random.uniform(self.target_root_x_speed_lower_bound, self.target_root_x_speed_higher_bound)
+        self.update_target_speed()
+
         observation = self._get_obs()
 
         return observation

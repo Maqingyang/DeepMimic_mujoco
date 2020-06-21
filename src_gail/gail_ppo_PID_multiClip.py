@@ -477,7 +477,7 @@ def main(args):
         save_name += "-%s" % osp.basename(args.config).split('.')[0]
         checkpoint_dir = osp.join(C.checkpoint_dir, save_name)
         log_dir = osp.join(checkpoint_dir, "log")
-        task_name = "multiClip"
+        task_name = "biped_multiClip"
 
         if MPI is None or MPI.COMM_WORLD.Get_rank() == 0:
             os.makedirs(checkpoint_dir, exist_ok=True)

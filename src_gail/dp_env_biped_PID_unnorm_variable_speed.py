@@ -144,7 +144,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         curr_root_x_speed = self.get_joint_vel()[0]
         err_speed = np.square(curr_root_x_speed - self.target_root_x_speed)
         # reward_config = math.exp(-self.scale_err * self.scale_pose * err_configs)
-        reward_speed = np.exp(-err_speed)
+        reward_speed = np.exp(-10*err_speed)
 
         return reward_speed
 

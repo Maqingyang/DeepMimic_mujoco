@@ -76,7 +76,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
 
         cymj.set_pid_control(self.sim.model, self.sim.data)
-        self.viewer = MjViewer(self.sim)
+        # self.viewer = MjViewer(self.sim)
         utils.EzPickle.__init__(self)
 
 

@@ -3,7 +3,7 @@ motion_folder: mujoco/motions
 xml_folder: mujoco/bipedal/envs/asset
 checkpoint_dir: checkpoint/
 # Env
-motion_file: biped_run.txt
+motion_file: biped_walk.txt
 env_file: bipedal_2d_PID.xml
 target_root_x_speed_lower_bound: 0.5
 target_root_x_speed_higher_bound: 3

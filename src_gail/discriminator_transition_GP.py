@@ -25,8 +25,8 @@ class Discriminator(object):
         self.hidden_size = hidden_size
         self.build_ph()
         # Build grpah
-        generator_logits = self.build_graph(self.generator_obs_ph, reuse=False)
-        expert_logits = self.build_graph(self.expert_obs_ph, reuse=True)
+        generator_logits, norm_generator_obs = self.build_graph(self.generator_obs_ph, reuse=False)
+        expert_logits, norm_expert_obs = self.build_graph(self.expert_obs_ph, reuse=True)
         # Build accuracy
         generator_acc = tf.reduce_mean(tf.to_float(tf.nn.sigmoid(generator_logits) < 0.5))
         expert_acc = tf.reduce_mean(tf.to_float(tf.nn.sigmoid(expert_logits) > 0.5))
@@ -45,11 +45,11 @@ class Discriminator(object):
         regular_loss = 1e-4 * tf.reduce_mean(regular_loss)
         all_weights = [weight for weight in self.get_trainable_variables() if "bias" not in weight.name]
         weight_norm = 1e-4 * tf.reduce_sum(tf.stack([tf.nn.l2_loss(weight) for weight in all_weights]))
-        gradient_penalty = 0.1 * tf.norm(tf.gradients(tf.log(tf.nn.sigmoid(expert_logits)), self.expert_obs_ph))
+        gradient_penalty = 0.1 * tf.nn.l2_loss(tf.gradients(tf.log(tf.nn.sigmoid(expert_logits)), norm_expert_obs))
         # Loss + Accuracy terms
-        self.losses = [generator_loss, expert_loss, entropy, entropy_loss, generator_acc, expert_acc, regular_loss, weight_norm]
-        self.loss_name = ["generator_loss", "expert_loss", "entropy", "entropy_loss", "generator_acc", "expert_acc", "regular_loss", "weight_norm"]
-        self.total_loss = generator_loss + expert_loss + entropy_loss + regular_loss + weight_norm
+        self.losses = [generator_loss, expert_loss, entropy, entropy_loss, generator_acc, expert_acc, regular_loss, weight_norm, gradient_penalty]
+        self.loss_name = ["generator_loss", "expert_loss", "entropy", "entropy_loss", "generator_acc", "expert_acc", "regular_loss", "weight_norm", "gradient_penalty"]
+        self.total_loss = generator_loss + expert_loss + entropy_loss + regular_loss + weight_norm + gradient_penalty
         # Build Reward for policy
         self.reward_op = -tf.log(1-tf.nn.sigmoid(generator_logits)+1e-8)
         var_list = self.get_trainable_variables()
@@ -71,7 +71,7 @@ class Discriminator(object):
             p_h1 = tf.contrib.layers.fully_connected(obs, self.hidden_size, activation_fn=tf.nn.tanh)
             p_h2 = tf.contrib.layers.fully_connected(p_h1, self.hidden_size, activation_fn=tf.nn.tanh)
             logits = tf.contrib.layers.fully_connected(p_h2, 1, activation_fn=tf.identity)
-        return logits
+        return logits, obs
 
     def get_trainable_variables(self):
         return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.scope)

@@ -269,15 +269,33 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return np.array(sample_list)
 
     def render(self,*arg,**kwarg):
-        arrow_pos = np.array([self.get_joint_configs[0], 0, -0.1])
+        arrow_pos = np.array([self.get_joint_configs()[0]+1, 0, self.get_joint_configs()[1]-0.3])
         self.viewer.add_marker(pos=arrow_pos, #position of the arrow
-                    size=np.array([0.005,0.005,0.4]), #size of the arrow
+                    size=np.array([0.005+0.001*self.target_root_x_speed,0.005+0.001*self.target_root_x_speed,0.2+0.09*self.target_root_x_speed]), #size of the arrow
                     mat=euler2mat([0,90,0]), # orientation as a matrix
-                    rgba=np.array([1.,1.,1.,1.]),#color of the arrow
+                    rgba=np.array([1.,0.85,0,1.]),#color of the arrow
                     type=const.GEOM_ARROW,
-                    label=str('%.2f' %self.target_root_x_speed))
+                    )
 
-        mujoco_env.MujocoEnv.render(*arg,**kwarg)
+        arrow_label_pos = np.array([self.get_joint_configs()[0]+0.95, 0, self.get_joint_configs()[1]-0.25])
+        self.viewer.add_marker(pos=arrow_label_pos, #position of the arrow
+                     size=np.array([1,1,1]), #size of the arrow
+                    # mat=euler2mat([0,90,0]), # orientation as a matrix
+                    # rgba=np.array([1.,1.,1.,1.]),#color of the arrow
+                    type=const.GEOM_LABEL,
+                    label=str('target speed: %.2f' %self.target_root_x_speed))
+
+
+        speed_pos = np.array([self.get_joint_configs()[0]-0.25, 0, self.get_joint_configs()[1]+0.3])
+
+        self.viewer.add_marker(pos=speed_pos, #position of the arrow
+                     size=np.array([1,1,1]), #size of the arrow
+                    # mat=euler2mat([0,90,0]), # orientation as a matrix
+                    # rgba=np.array([1.,1.,1.,1.]),#color of the arrow
+                    type=const.GEOM_LABEL,
+                    label=str('biped speed: %.2f' %(self.get_joint_vel()[0])))
+
+        mujoco_env.MujocoEnv.render(self,*arg,**kwarg)
 
 if __name__ == "__main__":
     C = Box.from_yaml(filename="config/gail_ppo_biped_PID_multiClip.yaml")

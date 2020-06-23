@@ -8,6 +8,8 @@ from mujoco.mocap_bipedal_2D_multiClip import MocapDM
 from mujoco.mujoco_interface import MujocoInterface
 from mujoco.mocap_util import JOINT_WEIGHT
 from mujoco_py import load_model_from_xml, MjSim, MjViewer, cymj
+from mujoco_py.generated import const
+from scipy.spatial.transform import Rotation as R
 
 from gym.envs.mujoco import mujoco_env
 from gym import utils
@@ -27,6 +29,9 @@ joint_limit = { "right_hip": [-1.2, 2.57],
                 "left_ankle": [-1.57, 1.57]
                 }   
 
+def euler2mat(euler, degrees=True):
+    r = R.from_euler('xyz', euler, degrees=degrees)
+    return r.as_matrix()
 
 def mass_center(model, sim):
     mass = np.expand_dims(model.body_mass, 1)
@@ -75,9 +80,8 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
 
         cymj.set_pid_control(self.sim.model, self.sim.data)
-        # self.viewer = MjViewer(self.sim)
+        self.viewer = MjViewer(self.sim)
         utils.EzPickle.__init__(self)
-
 
 
     def _get_obs(self):
@@ -138,17 +142,21 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     def update_target_speed(self):
         lower_bound = self.target_root_x_speed_lower_bound
         higher_bound = self.target_root_x_speed_higher_bound
-        time_in_period = (self.data.time + float(self.curr_clip_idx == 1) * 7) % 15
-        if time_in_period < 2:
-            self.target_root_x_speed = lower_bound
-        elif time_in_period < 7:
-            self.target_root_x_speed = (time_in_period-2)/(7-2)*(higher_bound-lower_bound) + lower_bound
-        elif time_in_period < 10:
-            self.target_root_x_speed = higher_bound
-        elif time_in_period < 15:
-            self.target_root_x_speed = higher_bound - (time_in_period-10)/(7-2)*(higher_bound-lower_bound)
+        # time_in_period = (self.data.time + float(self.curr_clip_idx == 1) * 7) % 15
+        # if time_in_period < 2:
+        #     self.target_root_x_speed = lower_bound
+        # elif time_in_period < 7:
+        #     self.target_root_x_speed = (time_in_period-2)/(7-2)*(higher_bound-lower_bound) + lower_bound
+        # elif time_in_period < 10:
+        #     self.target_root_x_speed = higher_bound
+        # elif time_in_period < 15:
+        #     self.target_root_x_speed = higher_bound - (time_in_period-10)/(7-2)*(higher_bound-lower_bound)
         
-
+        if self.data.time < 4:
+            self.target_root_x_speed = 5 if self.curr_clip_idx == 1 else 1.5
+        else:
+            if int(self.data.time - 4) % 4 == 0:
+                self.target_root_x_speed = np.random.uniform(self.target_root_x_speed_lower_bound, self.target_root_x_speed_higher_bound)
 
     def step(self, action):
 
@@ -260,6 +268,16 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         
         return np.array(sample_list)
 
+    def render(self,*arg,**kwarg):
+        arrow_pos = np.array([self.get_joint_configs[0], 0, -0.1])
+        self.viewer.add_marker(pos=arrow_pos, #position of the arrow
+                    size=np.array([0.005,0.005,0.4]), #size of the arrow
+                    mat=euler2mat([0,90,0]), # orientation as a matrix
+                    rgba=np.array([1.,1.,1.,1.]),#color of the arrow
+                    type=const.GEOM_ARROW,
+                    label=str('%.2f' %self.target_root_x_speed))
+
+        mujoco_env.MujocoEnv.render(*arg,**kwarg)
 
 if __name__ == "__main__":
     C = Box.from_yaml(filename="config/gail_ppo_biped_PID_multiClip.yaml")

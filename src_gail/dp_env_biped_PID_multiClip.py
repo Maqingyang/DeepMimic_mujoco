@@ -76,11 +76,12 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.max_time = 1
         self.target_root_x_speed_lower_bound = C.target_root_x_speed_lower_bound
         self.target_root_x_speed_higher_bound = C.target_root_x_speed_higher_bound
+        self.speed_random_flag = True
 
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
 
         cymj.set_pid_control(self.sim.model, self.sim.data)
-        self.viewer = MjViewer(self.sim)
+        # self.viewer = MjViewer(self.sim)
         utils.EzPickle.__init__(self)
 
 
@@ -154,9 +155,12 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         
         if self.data.time < 4:
             self.target_root_x_speed = 5 if self.curr_clip_idx == 1 else 1.5
-        else:
-            if int(self.data.time - 4) % 4 == 0:
-                self.target_root_x_speed = np.random.uniform(self.target_root_x_speed_lower_bound, self.target_root_x_speed_higher_bound)
+            self.speed_random_flag = True
+        elif int(self.data.time - 4) % 4 == 0 and self.speed_random_flag:
+            self.target_root_x_speed = np.random.uniform(self.target_root_x_speed_lower_bound, self.target_root_x_speed_higher_bound)
+            self.speed_random_flag = False
+        elif int(self.data.time - 4) % 4 == 1 and not self.speed_random_flag:
+            self.speed_random_flag = True
 
     def step(self, action):
 

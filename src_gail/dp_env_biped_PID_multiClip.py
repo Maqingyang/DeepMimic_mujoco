@@ -73,11 +73,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.policy_freq = 25
         self.is_gail = C.is_gail
         self.init_time = 0
-        if task == "evaluate":
-            self.max_time = 10
-            self.viewer = MjViewer(self.sim)
-        else:
-            self.max_time = 1
+        self.max_time = 1
 
         self.target_root_x_speed_lower_bound = C.target_root_x_speed_lower_bound
         self.target_root_x_speed_higher_bound = C.target_root_x_speed_higher_bound
@@ -85,6 +81,10 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
 
+        if task == "evaluate":
+            self.max_time = 10
+            self.viewer = MjViewer(self.sim)
+            
         cymj.set_pid_control(self.sim.model, self.sim.data)
         utils.EzPickle.__init__(self)
 

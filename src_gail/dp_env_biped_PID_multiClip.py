@@ -153,8 +153,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         # elif time_in_period < 15:
         #     self.target_root_x_speed = higher_bound - (time_in_period-10)/(7-2)*(higher_bound-lower_bound)
         
-        if self.data.time < 4:
-            self.target_root_x_speed = 5 if self.data.qvel[0] > 3 else 1.5
+        if self.data.time < 4 and not self.speed_random_flag:
             self.speed_random_flag = True
         elif int(self.data.time - 4) % 4 == 0 and self.speed_random_flag:
             self.target_root_x_speed = np.random.uniform(self.target_root_x_speed_lower_bound, self.target_root_x_speed_higher_bound)
@@ -220,11 +219,11 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         qpos = target_config
         qvel = target_vel
         self.set_state(qpos, qvel)
+        self.target_root_x_speed = 5 if self.data.qvel[0] > 3 else 1.5
 
     def reset_model(self):
         self.reference_state_init()
         # self.target_root_x_speed = np.random.uniform(self.target_root_x_speed_lower_bound, self.target_root_x_speed_higher_bound)
-        self.update_target_speed()
 
         observation = self._get_obs()
 

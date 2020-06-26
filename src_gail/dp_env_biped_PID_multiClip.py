@@ -74,11 +74,10 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.is_gail = C.is_gail
         self.init_time = 0
         self.max_time = 1
-
         self.target_root_x_speed_lower_bound = C.target_root_x_speed_lower_bound
         self.target_root_x_speed_higher_bound = C.target_root_x_speed_higher_bound
         self.speed_random_flag = True
-        self.reference_state_init()
+        self.target_root_x_speed = 1
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
 
         if task == "evaluate":

@@ -78,13 +78,13 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_root_x_speed_lower_bound = C.target_root_x_speed_lower_bound
         self.target_root_x_speed_higher_bound = C.target_root_x_speed_higher_bound
         self.speed_random_flag = True
-
+        self.reference_state_init()
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
 
         if task == "evaluate":
             self.max_time = 10
             self.viewer = MjViewer(self.sim)
-            
+
         cymj.set_pid_control(self.sim.model, self.sim.data)
         utils.EzPickle.__init__(self)
 
@@ -160,7 +160,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.data.time < 4 and not self.speed_random_flag:
             self.speed_random_flag = True
         elif int(self.data.time - 4) % 4 == 0 and self.speed_random_flag:
-            self.target_root_x_speed = np.random.uniform(self.target_root_x_speed_lower_bound, self.target_root_x_speed_higher_bound)
+            self.target_root_x_speed = np.random.uniform(lower_bound, higher_bound)
             self.speed_random_flag = False
         elif int(self.data.time - 4) % 4 == 1 and not self.speed_random_flag:
             self.speed_random_flag = True

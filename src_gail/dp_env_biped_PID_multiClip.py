@@ -43,7 +43,7 @@ def lerp(qpos_0, qpos_1, ratio):
 
 
 class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
-    def __init__(self,C):
+    def __init__(self,C,task):
 
         xml_file_path = osp.join(getcwd(), C.xml_folder, C.env_file)
 
@@ -73,7 +73,12 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.policy_freq = 25
         self.is_gail = C.is_gail
         self.init_time = 0
-        self.max_time = 1
+        if task == "evaluate":
+            self.max_time = 10
+            self.viewer = MjViewer(self.sim)
+        else:
+            self.max_time = 1
+
         self.target_root_x_speed_lower_bound = C.target_root_x_speed_lower_bound
         self.target_root_x_speed_higher_bound = C.target_root_x_speed_higher_bound
         self.speed_random_flag = True
@@ -81,7 +86,6 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         mujoco_env.MujocoEnv.__init__(self, xml_file_path, 1)
 
         cymj.set_pid_control(self.sim.model, self.sim.data)
-        # self.viewer = MjViewer(self.sim)
         utils.EzPickle.__init__(self)
 
 

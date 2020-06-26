@@ -460,7 +460,7 @@ def main(args):
     set_global_seeds(C.seed)
 
     from dp_env_biped_PID_multiClip import DPEnv
-    env = DPEnv(C)
+    env = DPEnv(C, args.task)
 
 
     def policy_func(name, ob_space, ac_space, reuse=False):

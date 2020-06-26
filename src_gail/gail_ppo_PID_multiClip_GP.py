@@ -93,7 +93,7 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
 
         transition = np.concatenate([pos_0, pos_1])
         transitions[i] = transition
-        d_rew = 10 * reward_giver.get_reward(transition) + speed_rew
+        d_rew = 10 * reward_giver.get_reward(transition) + 100*speed_rew
         
         next_obs[i] = next_ob
         ob = next_ob
@@ -477,7 +477,7 @@ def main(args):
         save_name += "-%s" % osp.basename(args.config).split('.')[0]
         checkpoint_dir = osp.join(C.checkpoint_dir, save_name)
         log_dir = osp.join(checkpoint_dir, "log")
-        task_name = "biped_multiClip_GP_random_speed_target"
+        task_name = "biped_multiClip_GP_100_5clips"
 
         if MPI is None or MPI.COMM_WORLD.Get_rank() == 0:
             os.makedirs(checkpoint_dir, exist_ok=True)

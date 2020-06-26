@@ -29,7 +29,7 @@ joint_limit = { "right_hip": [-1.2, 2.57],
                 "left_ankle": [-1.57, 1.57]
                 }   
 
-def euler2mat(euler, degrees=True):
+def euler2mat(euler, degrees=True): 
     r = R.from_euler('xyz', euler, degrees=degrees)
     return r.as_matrix()
 
@@ -154,7 +154,7 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         #     self.target_root_x_speed = higher_bound - (time_in_period-10)/(7-2)*(higher_bound-lower_bound)
         
         if self.data.time < 4:
-            self.target_root_x_speed = 5 if self.curr_clip_idx == 1 else 1.5
+            self.target_root_x_speed = 5 if self.data.qvel[0] > 3 else 1.5
             self.speed_random_flag = True
         elif int(self.data.time - 4) % 4 == 0 and self.speed_random_flag:
             self.target_root_x_speed = np.random.uniform(self.target_root_x_speed_lower_bound, self.target_root_x_speed_higher_bound)
@@ -305,7 +305,7 @@ if __name__ == "__main__":
     C = Box.from_yaml(filename="config/gail_ppo_biped_PID_multiClip.yaml")
     env = DPEnv(C)
     env.reset_model()
-
+    env.sample_expert_traj()
     import cv2
     from VideoSaver import VideoSaver
     width = 640

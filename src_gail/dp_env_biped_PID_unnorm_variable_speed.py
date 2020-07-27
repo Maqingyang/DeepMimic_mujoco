@@ -77,9 +77,20 @@ class DPEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         utils.EzPickle.__init__(self)
 
     def _get_obs(self):
+        """
+        for bipedal, obs is (9,)
+        root_x
+        root_z
+        rot_y
+        right_hip
+        right_knee
+        right_ankle
+        left_hip
+        left_knee
+        left_ankle
+        """
         position = self.sim.data.qpos.flat.copy()
         velocity = self.sim.data.qvel.flat.copy()
-        ## add mocap data as additional observation
         target_config = self.target_config
         target_vel = self.target_vel
         

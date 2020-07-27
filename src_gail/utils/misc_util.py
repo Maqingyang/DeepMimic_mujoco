@@ -7,7 +7,10 @@ import tempfile
 import zipfile
 
 from mpi4py import MPI
-import utils.tf_util as U
+if os.getcwd().endswith("utils"):
+    import tf_util as U
+else:
+    import utils.tf_util as U
 
 import tensorflow as tf
 

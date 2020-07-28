@@ -9,6 +9,9 @@ from utils.gcn_layers import *
 from utils.gcn_metrics import *
 from utils.gcn_utils import *
 
+from mpi_adam import MpiAdam
+from utils.console_util import fmt_row, colorize
+
 def logsigmoid(a):
     '''Equivalent to tf.log(tf.sigmoid(a))'''
     return -tf.nn.softplus(-a)
@@ -47,7 +50,7 @@ class GraphDiscriminator(object):
         # Loss + Accuracy terms
         self.losses = [generator_loss, expert_loss, entropy, entropy_loss, generator_acc, expert_acc, regular_loss, weight_norm, gradient_penalty]
         self.loss_name = ["generator_loss", "expert_loss", "entropy", "entropy_loss", "generator_acc", "expert_acc", "regular_loss", "weight_norm", "gradient_penalty"]
-        self.total_loss = generator_loss + expert_loss + entropy_loss + regular_loss + weight_norm + gradient_penalty
+        self.total_loss = generator_loss + expert_loss #+ entropy_loss + regular_loss + weight_norm + gradient_penalty
         # Build Reward for policy
         generator_logits_concat = tf.concat(generator_logits_list, axis=0)
         self.reward_op = tf.reduce_sum(-tf.log(1-tf.nn.sigmoid(generator_logits_concat)+1e-8))
@@ -109,6 +112,7 @@ class GraphDiscriminator(object):
                 activations.append(hidden)
             for hidden in activations:
                 logits_list.append(tf.contrib.layers.fully_connected(hidden, 1, activation_fn=tf.identity,reuse=tf.AUTO_REUSE,scope="disc"))
+            # logits_list.append(tf.contrib.layers.fully_connected(obs, 1, activation_fn=tf.identity,reuse=tf.AUTO_REUSE,scope="disc"))
         return logits_list, obs
 
     def get_trainable_variables(self):
@@ -142,61 +146,69 @@ if __name__=="__main__":
     for con in connections:
         adj[con] = 1
         adj.T[con] = 1
+
+    d_stepsize = 1e-6
+    reward_giver = GraphDiscriminator(2,4,adj)
+    d_adam = MpiAdam(reward_giver.get_trainable_variables())
+
     with U.make_session(num_cpu=1) as sess:
-        reward_giver = GraphDiscriminator(2,64,adj)
-        transition_batch = np.random.randn(32,9,2)
-        transition_expert = np.random.randn(32,9,2)
+        for i in range(100):
+            transition_batch = -np.ones((32,9,2))
+            transition_expert = np.ones((32,9,2))
 
-        init_op = tf.initialize_all_variables()
-        sess.run(init_op)
-        *newlosses, g = reward_giver.lossandgrad(transition_batch, transition_expert)
+            init_op = tf.initialize_all_variables()
+            sess.run(init_op)
+            *newlosses, g = reward_giver.lossandgrad(transition_batch, transition_expert)
+            d_adam.update(g, d_stepsize)
+            print(fmt_row(13, reward_giver.loss_name))
+            print(fmt_row(13, newlosses))
 
-    # Settings
-    flags = tf.app.flags
-    FLAGS = flags.FLAGS
-    flags.DEFINE_string('dataset', 'cora', 'Dataset string.')  # 'cora', 'citeseer', 'pubmed'
-    flags.DEFINE_string('model', 'gcn', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
-    flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
-    flags.DEFINE_integer('epochs', 200, 'Number of epochs to train.')
-    flags.DEFINE_integer('hidden1', 16, 'Number of units in hidden layer 1.')
-    flags.DEFINE_float('dropout', 0.5, 'Dropout rate (1 - keep probability).')
-    flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix.')
-    flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of epochs).')
-    flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
-    # Create data
-    features = preprocess_features(sp.csr.csr_matrix(np.ones((6,1))))
-    adj = sp.csr.csr_matrix(np.random.randn(6,6))
-    support = [preprocess_adj(adj)]
-    support_sparse = preprocess_adj(adj).toarray()
-    support_dense = reward_giver._preprocess_adj(adj)
-
-
-    y_train = np.zeros((6,2))
-    y_train[:,0] = 1    
-    train_mask = np.array([True for _ in range(6)])
-    num_supports = 1
-
-    # Define placeholders
-    placeholders = {
-        'support': [tf.sparse_placeholder(tf.float32) for _ in range(num_supports)],
-        'features': tf.sparse_placeholder(tf.float32, shape=tf.constant(features[2], dtype=tf.int64)),
-        'labels': tf.placeholder(tf.float32, shape=(None, y_train.shape[1])),
-        'labels_mask': tf.placeholder(tf.int32),
-        'dropout': tf.placeholder_with_default(0., shape=()),
-        'num_features_nonzero': tf.placeholder(tf.int32)  # helper variable for sparse dropout
-    }
-    # Create model
-
-    gcn_model = GCN(placeholders, input_dim=1, logging=True)
+    # # Settings
+    # flags = tf.app.flags
+    # FLAGS = flags.FLAGS
+    # flags.DEFINE_string('dataset', 'cora', 'Dataset string.')  # 'cora', 'citeseer', 'pubmed'
+    # flags.DEFINE_string('model', 'gcn', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
+    # flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
+    # flags.DEFINE_integer('epochs', 200, 'Number of epochs to train.')
+    # flags.DEFINE_integer('hidden1', 16, 'Number of units in hidden layer 1.')
+    # flags.DEFINE_float('dropout', 0.5, 'Dropout rate (1 - keep probability).')
+    # flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix.')
+    # flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of epochs).')
+    # flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
+    # # Create data
+    # features = preprocess_features(sp.csr.csr_matrix(np.ones((6,1))))
+    # adj = sp.csr.csr_matrix(np.random.randn(6,6))
+    # support = [preprocess_adj(adj)]
+    # support_sparse = preprocess_adj(adj).toarray()
+    # support_dense = reward_giver._preprocess_adj(adj)
 
 
-    # Construct feed dictionary
-    feed_dict = construct_feed_dict(features, support, y_train, train_mask, placeholders)
-    feed_dict.update({placeholders['dropout']: FLAGS.dropout})
+    # y_train = np.zeros((6,2))
+    # y_train[:,0] = 1    
+    # train_mask = np.array([True for _ in range(6)])
+    # num_supports = 1
 
-    # Initialize Session
-    sess = tf.Session()
-    # Init variables
-    sess.run(tf.global_variables_initializer())
-    # Get output
-    outs = sess.run([gcn_model.opt_op, gcn_model.loss, gcn_model.accuracy], feed_dict=feed_dict)
+    # # Define placeholders
+    # placeholders = {
+    #     'support': [tf.sparse_placeholder(tf.float32) for _ in range(num_supports)],
+    #     'features': tf.sparse_placeholder(tf.float32, shape=tf.constant(features[2], dtype=tf.int64)),
+    #     'labels': tf.placeholder(tf.float32, shape=(None, y_train.shape[1])),
+    #     'labels_mask': tf.placeholder(tf.int32),
+    #     'dropout': tf.placeholder_with_default(0., shape=()),
+    #     'num_features_nonzero': tf.placeholder(tf.int32)  # helper variable for sparse dropout
+    # }
+    # # Create model
+
+    # gcn_model = GCN(placeholders, input_dim=1, logging=True)
+
+
+    # # Construct feed dictionary
+    # feed_dict = construct_feed_dict(features, support, y_train, train_mask, placeholders)
+    # feed_dict.update({placeholders['dropout']: FLAGS.dropout})
+
+    # # Initialize Session
+    # sess = tf.Session()
+    # # Init variables
+    # sess.run(tf.global_variables_initializer())
+    # # Get output
+    # outs = sess.run([gcn_model.opt_op, gcn_model.loss, gcn_model.accuracy], feed_dict=feed_dict)

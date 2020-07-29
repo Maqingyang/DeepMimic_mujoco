@@ -31,8 +31,8 @@ lr_schedule: "constant"
 # GAIL
 is_gail: true
 expert_path: null
-adversary_hidden_size: 32
+adversary_hidden_size: 64
 adversary_entcoeff: 1e-3
-d_stepsize: 1e-5
+d_stepsize: 1e-3
 
 

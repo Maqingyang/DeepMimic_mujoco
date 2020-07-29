@@ -36,27 +36,40 @@ class GraphDiscriminator(object):
         generator_logits_list, norm_generator_obs = self.build_graph(self.generator_obs_ph, reuse=False)
         expert_logits_list, norm_expert_obs = self.build_graph(self.expert_obs_ph, reuse=True)
         # Build accuracy
-        generator_acc = tf.reduce_mean(tf.to_float(tf.nn.sigmoid(generator_logits_list[-1]) < 0.5))
-        expert_acc = tf.reduce_mean(tf.to_float(tf.nn.sigmoid(expert_logits_list[-1]) > 0.5))
+        # generator_acc = tf.reduce_mean(tf.to_float(tf.nn.sigmoid(generator_logits_list[-1]) < 0.5))
+        # expert_acc = tf.reduce_mean(tf.to_float(tf.nn.sigmoid(expert_logits_list[-1]) > 0.5))
+
+        generator_acc = tf.reduce_mean(tf.to_float(generator_logits_list[-1] < 0.5))
+        expert_acc = tf.reduce_mean(tf.to_float(expert_logits_list[-1]> 0.5))
         node_losses = list()
-        for generator_logits, expert_logits in zip(generator_logits_list, expert_logits_list):
+        reward_list = list()
+        for generator_logits, expert_logits in zip(generator_logits_list, expert_logits_list):            
             node_losses.append(self.build_node_loss(generator_logits, expert_logits, norm_expert_obs))
+            reward_list.append(tf.reduce_mean(-tf.log(1-tf.nn.sigmoid(generator_logits)+1e-8), axis=0))
         node_losses = tf.add_n(node_losses)
 
         generator_loss, expert_loss, entropy, entropy_loss, regular_loss, gradient_penalty, reward = [tf.squeeze(x) for x in tf.split(node_losses,node_losses.shape[0])]
-
         all_weights = [weight for weight in self.get_trainable_variables() if "bias" not in weight.name]
         weight_norm = 1e-4 * tf.reduce_sum(tf.stack([tf.nn.l2_loss(weight) for weight in all_weights]))
         # Loss + Accuracy terms
-        self.losses = [generator_loss, expert_loss, entropy, entropy_loss, generator_acc, expert_acc, regular_loss, weight_norm, gradient_penalty]
-        self.loss_name = ["generator_loss", "expert_loss", "entropy", "entropy_loss", "generator_acc", "expert_acc", "regular_loss", "weight_norm", "gradient_penalty"]
-        self.total_loss = generator_loss + expert_loss #+ entropy_loss + regular_loss + weight_norm + gradient_penalty
+        self.losses = [tf.reduce_mean(generator_logits), tf.reduce_mean(expert_logits), generator_loss, expert_loss, entropy, entropy_loss, generator_acc, expert_acc, regular_loss, weight_norm, gradient_penalty]
+        self.loss_name = ["g_logits", "e_logits", "generator_loss", "expert_loss", "entropy", "entropy_loss", "generator_acc", "expert_acc", "regular_loss", "weight_norm", "gradient_penalty"]
+        self.total_loss = generator_loss + expert_loss + entropy_loss + regular_loss + weight_norm + gradient_penalty
         # Build Reward for policy
         generator_logits_concat = tf.concat(generator_logits_list, axis=0)
         self.reward_op = tf.reduce_sum(-tf.log(1-tf.nn.sigmoid(generator_logits_concat)+1e-8))
         var_list = self.get_trainable_variables()
+
         self.lossandgrad = U.function([self.generator_obs_ph, self.expert_obs_ph],
                                       self.losses + [U.flatgrad(self.total_loss, var_list)])
+        self.summary = U.function([self.generator_obs_ph, self.expert_obs_ph], self.build_summary(reward_list))
+    
+    def build_summary(self, reward_list):
+        summary_list = list()
+        for layer_id, reward in enumerate(reward_list):
+            for node_id, reward_per_node in enumerate(tf.split(reward, reward.shape[0])):
+                summary_list.append(tf.summary.scalar("/layer_%d/node_%d" %(layer_id, node_id), tf.squeeze(reward_per_node)))
+        return summary_list
 
     def build_node_loss(self, generator_logits, expert_logits, norm_expert_obs):
         # Build regression loss
@@ -64,16 +77,21 @@ class GraphDiscriminator(object):
         # z * -log(sigmoid(x)) + (1 - z) * -log(1 - sigmoid(x))
         generator_loss = tf.nn.sigmoid_cross_entropy_with_logits(logits=generator_logits, labels=tf.zeros_like(generator_logits))
         generator_loss = tf.reduce_mean(generator_loss)
+        # generator_loss = tf.reduce_sum(tf.square(generator_logits)/2)
+
         expert_loss = tf.nn.sigmoid_cross_entropy_with_logits(logits=expert_logits, labels=tf.ones_like(expert_logits))
         expert_loss = tf.reduce_mean(expert_loss)
+        # expert_loss = tf.reduce_sum(tf.square(expert_logits-1))
+
         # Build entropy loss
         logits = tf.concat([generator_logits, expert_logits], 0)
         entropy = tf.reduce_mean(logit_bernoulli_entropy(logits))
         entropy_loss = -self.entcoeff*entropy
         regular_loss = tf.nn.l2_loss(logits)
         regular_loss = 1e-4 * tf.reduce_mean(regular_loss)
-        gradient_penalty = 0.1 * tf.nn.l2_loss(tf.gradients(tf.log(tf.nn.sigmoid(expert_logits)), norm_expert_obs))
+        gradient_penalty = 1e-3 * tf.nn.l2_loss(tf.gradients(tf.log(tf.nn.sigmoid(expert_logits)), norm_expert_obs))
         reward = tf.reduce_sum(-tf.log(1-tf.nn.sigmoid(generator_logits)+1e-8))
+
         return tf.stack([generator_loss, expert_loss, entropy, entropy_loss, regular_loss, gradient_penalty, reward], axis=0)
         
     def build_ph(self):
@@ -88,7 +106,7 @@ class GraphDiscriminator(object):
             with tf.variable_scope("obfilter"):
                 self.obs_rms = RunningMeanStd(shape=self.obs_shape)
             obs = (obs_ph - self.obs_rms.mean) / self.obs_rms.std #（N,G,M)
-
+            obs = obs_ph
             layers = list()
             activations = list()
             logits_list = list()
@@ -112,7 +130,8 @@ class GraphDiscriminator(object):
                 activations.append(hidden)
             for hidden in activations:
                 logits_list.append(tf.contrib.layers.fully_connected(hidden, 1, activation_fn=tf.identity,reuse=tf.AUTO_REUSE,scope="disc"))
-            # logits_list.append(tf.contrib.layers.fully_connected(obs, 1, activation_fn=tf.identity,reuse=tf.AUTO_REUSE,scope="disc"))
+            # p1 = tf.contrib.layers.fully_connected(obs, 16, activation_fn=tf.nn.relu, reuse=tf.AUTO_REUSE,scope="disc0")
+            # logits_list.append(tf.contrib.layers.fully_connected(p1, 1, activation_fn=tf.identity,reuse=tf.AUTO_REUSE,scope="disc"))
         return logits_list, obs
 
     def get_trainable_variables(self):
@@ -147,21 +166,96 @@ if __name__=="__main__":
         adj[con] = 1
         adj.T[con] = 1
 
-    d_stepsize = 1e-6
-    reward_giver = GraphDiscriminator(2,4,adj)
+    d_stepsize = 1e-2
+    reward_giver = GraphDiscriminator(2,16,adj)
     d_adam = MpiAdam(reward_giver.get_trainable_variables())
 
     with U.make_session(num_cpu=1) as sess:
+        writer = tf.summary.FileWriter("./graphs", sess.graph)
+        init_op = tf.initialize_all_variables()
+        sess.run(init_op)
         for i in range(100):
-            transition_batch = -np.ones((32,9,2))
-            transition_expert = np.ones((32,9,2))
+            transition_batch = np.ones((1,9,2))+0.1*np.random.randn(1,9,2)
+            transition_expert = -np.ones((1,9,2))+0.1*np.random.randn(1,9,2)
 
-            init_op = tf.initialize_all_variables()
-            sess.run(init_op)
+
             *newlosses, g = reward_giver.lossandgrad(transition_batch, transition_expert)
+            summary_list = reward_giver.summary(transition_batch, transition_expert)
+            for summary in summary_list:
+                writer.add_summary(summary, i)
+
             d_adam.update(g, d_stepsize)
             print(fmt_row(13, reward_giver.loss_name))
             print(fmt_row(13, newlosses))
+            # print(sess.run(reward_giver.get_trainable_variables()))
+
+
+# # simple logistic regression
+#     np.random.seed(101)
+#     tf.set_random_seed(101)
+
+
+#     # Genrating random linear data 
+#     # There will be 50 data points ranging from 0 to 50 
+#     x = np.linspace(0, 50, 50) 
+#     y = np.linspace(0, 50, 50) 
+    
+#     # Adding noise to the random linear data 
+#     x += np.random.uniform(-4, 4, 50) 
+#     y += np.random.uniform(-4, 4, 50) 
+    
+#     n = len(x) # Number of data points 
+
+#     X = tf.placeholder("float") 
+#     Y = tf.placeholder("float") 
+
+
+#     W = tf.Variable(np.random.randn(), name = "W") 
+#     b = tf.Variable(np.random.randn(), name = "b") 
+
+#     learning_rate = 0.01
+#     training_epochs = 1000
+
+#     # Hypothesis 
+#     y_pred = tf.add(tf.multiply(X, W), b) 
+
+#     # Mean Squared Error Cost Function 
+#     cost = tf.reduce_sum(tf.pow(y_pred-Y, 2)) / (2 * n) 
+
+#     # Gradient Descent Optimizer 
+#     # optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(cost) 
+#     var_list = [W,b]
+#     lossandgrad = U.function([X, Y],
+#                             [cost] + [U.flatgrad(cost, var_list)])
+#     d_adam = MpiAdam(var_list)
+
+#     # Global Variables Initializer 
+#     init = tf.global_variables_initializer() 
+
+#     # Starting the Tensorflow Session 
+#     with tf.Session() as sess: 
+        
+#         # Initializing the Variables 
+#         sess.run(init) 
+        
+#         # Iterating through all the epochs 
+#         for epoch in range(training_epochs): 
+            
+#             # Feeding each data point into the optimizer using Feed Dictionary 
+#             for (_x, _y) in zip(x, y): 
+#                 cost, g = lossandgrad(_x, _y)
+#                 d_adam.update(g, learning_rate)
+#             # Displaying the result after every 50 epochs 
+#             if (epoch + 1) % 50 == 0: 
+#                 # Calculating the cost a every epoch 
+#                 # c = sess.run(cost, feed_dict = {X : x, Y : y}) 
+#                 print("Epoch", (epoch + 1), ": cost =", cost, "W =", sess.run(W), "b =", sess.run(b)) 
+        
+#         # Storing necessary values to be used outside the Session 
+#         training_cost = sess.run(cost, feed_dict ={X: x, Y: y}) 
+#         weight = sess.run(W) 
+#         bias = sess.run(b) 
+
 
     # # Settings
     # flags = tf.app.flags

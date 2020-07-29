@@ -16,7 +16,7 @@ def fmt_row(width, row, header=False):
 
 def fmt_item(x, l):
     if isinstance(x, np.ndarray):
-        assert x.ndim==0
+        assert x.ndim==0, "x.ndim: %d" %(x.ndim)
         x = x.item()
     if isinstance(x, (float, np.float32, np.float64)):
         v = abs(x)

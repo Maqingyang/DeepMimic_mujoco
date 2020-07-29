@@ -138,7 +138,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
           timesteps_per_batch=4096, clip_param=0.2, entcoeff=0.01, g_optim_epochs=4,
           gamma=0.99, lam=0.95, adam_epsilon=1e-5, lr_schedule='linear',
           g_stepsize=1e-4, d_stepsize=1e-4, 
-          max_timesteps=0,
+          max_timesteps=0, writer=None,
           callback=None):
 
     nworkers = MPI.COMM_WORLD.Get_size()
@@ -235,6 +235,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
     episodes_so_far = 0
     timesteps_so_far = 0
     iters_so_far = 0
+    d_timestep = 0
     tstart = time.time()
     lenbuffer = deque(maxlen=40)  # rolling buffer for episode lengths
     rewbuffer = deque(maxlen=40)  # rolling buffer for episode rewards
@@ -335,6 +336,10 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
             # update running mean/std for reward_giver
             if hasattr(reward_giver, "obs_rms"): reward_giver.obs_rms.update(np.concatenate((transition_batch, transition_expert), 0))
             *newlosses, g = reward_giver.lossandgrad(transition_batch, transition_expert)
+            summary_list = reward_giver.summary(transition_batch, transition_expert)
+            for summary in summary_list:
+                writer.add_summary(summary, d_timestep)
+            d_timestep += batch_size
             d_adam.update(allmean(g), d_stepsize)
             d_losses.append(newlosses)
         logger.log(fmt_row(13, np.mean(d_losses, axis=0)))
@@ -487,6 +492,7 @@ def main(args):
             C.to_yaml(osp.join(checkpoint_dir, "config.yaml"))
             logger.configure(dir=log_dir)
 
+        writer = tf.summary.FileWriter(osp.join(log_dir,"./graphs"), tf.get_default_graph())
         if MPI.COMM_WORLD.Get_rank() != 0:
             logger.set_level(logger.DISABLED)
         else:
@@ -527,7 +533,7 @@ def main(args):
                 timesteps_per_batch=C.timesteps_per_batch, clip_param=C.clip_param, entcoeff=C.entcoeff, g_optim_epochs=C.g_optim_epochs,
                 gamma=C.gamma, lam=C.lam, adam_epsilon=C.adam_epsilon, lr_schedule=C.lr_schedule,
                 g_stepsize=C.g_stepsize, d_stepsize=C.d_stepsize, 
-                max_timesteps=C.max_timesteps,
+                max_timesteps=C.max_timesteps, writer=writer,
                 callback=None)
 
 

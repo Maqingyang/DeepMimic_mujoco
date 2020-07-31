@@ -11,6 +11,9 @@ from utils.gcn_utils import *
 
 from mpi_adam import MpiAdam
 from utils.console_util import fmt_row, colorize
+from utils.mujoco_dset import Dset_transition
+from box import Box
+from dp_env_biped_PID_unnorm_variable_speed import DPEnv
 
 def logsigmoid(a):
     '''Equivalent to tf.log(tf.sigmoid(a))'''
@@ -42,10 +45,15 @@ class GraphDiscriminator(object):
         generator_acc = tf.reduce_mean(tf.to_float(generator_logits_list[-1] < 0.5))
         expert_acc = tf.reduce_mean(tf.to_float(expert_logits_list[-1]> 0.5))
         node_losses = list()
-        reward_list = list()
+        self.reward_list = list()
+        self.g_acc_list = list()
+        self.e_acc_list = list()
         for generator_logits, expert_logits in zip(generator_logits_list, expert_logits_list):            
             node_losses.append(self.build_node_loss(generator_logits, expert_logits, norm_expert_obs))
-            reward_list.append(tf.reduce_mean(-tf.log(1-tf.nn.sigmoid(generator_logits)+1e-8), axis=0))
+            self.reward_list.append(tf.reduce_mean(-tf.log(1-tf.nn.sigmoid(generator_logits)+1e-8), axis=0))
+            self.g_acc_list.append(tf.reduce_mean(tf.to_float(generator_logits < 0.5), axis=0))
+            self.e_acc_list.append(tf.reduce_mean(tf.to_float(expert_logits > 0.5), axis=0))
+
         node_losses = tf.add_n(node_losses)
 
         generator_loss, expert_loss, entropy, entropy_loss, regular_loss, gradient_penalty, reward = [tf.squeeze(x) for x in tf.split(node_losses,node_losses.shape[0])]
@@ -57,18 +65,26 @@ class GraphDiscriminator(object):
         self.total_loss = generator_loss + expert_loss + entropy_loss + regular_loss + weight_norm + gradient_penalty
         # Build Reward for policy
         generator_logits_concat = tf.concat(generator_logits_list, axis=0)
-        self.reward_op = tf.reduce_sum(-tf.log(1-tf.nn.sigmoid(generator_logits_concat)+1e-8))
+        self.reward_op = tf.reduce_mean(-tf.log(1-tf.nn.sigmoid(generator_logits_concat)+1e-8))
         var_list = self.get_trainable_variables()
-
+        summary_list = self.build_summary()
         self.lossandgrad = U.function([self.generator_obs_ph, self.expert_obs_ph],
                                       self.losses + [U.flatgrad(self.total_loss, var_list)])
-        self.summary = U.function([self.generator_obs_ph, self.expert_obs_ph], self.build_summary(reward_list))
+        self.summary = U.function([self.generator_obs_ph, self.expert_obs_ph], summary_list)
     
-    def build_summary(self, reward_list):
+    def build_summary(self):
         summary_list = list()
-        for layer_id, reward in enumerate(reward_list):
-            for node_id, reward_per_node in enumerate(tf.split(reward, reward.shape[0])):
-                summary_list.append(tf.summary.scalar("/layer_%d/node_%d" %(layer_id, node_id), tf.squeeze(reward_per_node)))
+        for layer_id, layer_results in enumerate(zip(self.reward_list, self.g_acc_list, self.e_acc_list)):
+            reward, g_acc, e_acc = layer_results
+            for node_id in range(reward.shape[0]):
+                summary_list.append(tf.summary.scalar("/layer_%d/reward_node_%d" %(layer_id, node_id), tf.squeeze(reward[node_id])))
+                summary_list.append(tf.summary.scalar("/layer_%d/g_acc_node_%d" %(layer_id, node_id), tf.squeeze(g_acc[node_id])))
+                summary_list.append(tf.summary.scalar("/layer_%d/e_acc_node_%d" %(layer_id, node_id), tf.squeeze(e_acc[node_id])))
+        for loss_name, loss in zip(self.loss_name, self.losses):
+            summary_list += [tf.summary.scalar(loss_name, loss)]
+        summary_list += [tf.summary.scalar("reward_op", self.reward_op)]
+        summary_list += [tf.summary.scalar("total_loss", self.total_loss)]
+
         return summary_list
 
     def build_node_loss(self, generator_logits, expert_logits, norm_expert_obs):
@@ -167,16 +183,23 @@ if __name__=="__main__":
         adj.T[con] = 1
 
     d_stepsize = 1e-2
+    batch_size = 32
     reward_giver = GraphDiscriminator(2,16,adj)
     d_adam = MpiAdam(reward_giver.get_trainable_variables())
+    
+    C = Box.from_yaml(filename="config/gail_ppo_PID_unnorm_variable_speed_graph.yaml")
+    env = DPEnv(C)
+    expert_dataset = Dset_transition(transitions = env.sample_expert_traj())
 
     with U.make_session(num_cpu=1) as sess:
         writer = tf.summary.FileWriter("./graphs", sess.graph)
         init_op = tf.initialize_all_variables()
         sess.run(init_op)
         for i in range(100):
-            transition_batch = np.ones((1,9,2))+0.1*np.random.randn(1,9,2)
-            transition_expert = -np.ones((1,9,2))+0.1*np.random.randn(1,9,2)
+            transition_batch = np.random.randn(batch_size,9,2)
+            transition_expert = expert_dataset.get_next_batch(batch_size) #(N,2*9)
+            transition_expert = transition_expert.reshape([-1,2,9]).transpose(0,2,1)
+            transition_batch = transition_batch.reshape([-1,2,9]).transpose(0,2,1)
 
 
             *newlosses, g = reward_giver.lossandgrad(transition_batch, transition_expert)

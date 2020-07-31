@@ -25,7 +25,7 @@ from statistics import stats
 from mlp_policy import MlpPolicy
 from box import Box
 
-from dp_env_biped_PID_unnorm_variable_speed import DPEnv
+from dp_env_biped_PID_unnorm import DPEnv
 from discriminator_transition_GP_graph import GraphDiscriminator
 
 pos_len = 9
@@ -37,13 +37,13 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
     ac = env.action_space.sample()
     new = True
     rew = 0.0
-    speed_rew = 0.0
+    env_rew = 0.0
     ob = env.reset()
 
     cur_ep_ret = 0
     cur_ep_len = 0
-    cur_ep_speed_ret = 0
-    cur_ep_speed_rets = []
+    cur_ep_env_ret = 0
+    cur_ep_env_rets = []
     cur_ep_disc_ret = 0
     cur_ep_disc_rets = []
     ep_rets = []
@@ -53,7 +53,7 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
     obs = np.array([ob for _ in range(horizon)])
     next_obs = obs.copy()
     transitions = np.array([np.zeros(pos_len*2) for _ in range(horizon)])
-    speed_rews = np.zeros(horizon, 'float32')
+    env_rews = np.zeros(horizon, 'float32')
     rews = np.zeros(horizon, 'float32')
     vpreds = np.zeros(horizon, 'float32')
     news = np.zeros(horizon, 'int32')
@@ -71,12 +71,12 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
         if t > 0 and t % horizon == 0:
             yield {"ob": obs, "next_ob": next_obs, "transitions":transitions, "rew": rews, "vpred": vpreds, "new": news,
                    "ac": acs, "prevac": prevacs, "nextvpred": vpred * (1 - new),
-                   "ep_rets": ep_rets, "ep_lens": ep_lens, "cur_ep_speed_rets": cur_ep_speed_rets, "cur_ep_disc_rets":cur_ep_disc_rets}
+                   "ep_rets": ep_rets, "ep_lens": ep_lens, "cur_ep_env_rets": cur_ep_env_rets, "cur_ep_disc_rets":cur_ep_disc_rets}
             _, vpred = pi.act(stochastic=stochastic, ob=masked_ob)
             # Be careful!!! if you change the downstream algorithm to aggregate
             # several of these batches, then be sure to do a deepcopy
             ep_rets = []
-            cur_ep_speed_rets = []
+            cur_ep_env_rets = []
             cur_ep_disc_rets = []
             ep_lens = []
         i = t % horizon
@@ -87,34 +87,34 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
         acs[i] = ac
         prevacs[i] = prevac
 
-        next_ob, speed_rew, new, _ = env.step(ac)
+        next_ob, env_rew, new, _ = env.step(ac)
         pos_0 = ob[:pos_len].copy()
         pos_1 = next_ob[:pos_len].copy()
-        # pos_1[0] -= pos_0[0]
-        pos_1[0] = 0 
-        pos_0[0] = 0
+        pos_1[0] -= pos_0[0]
+        # pos_1[0] = 0 
+        # pos_0[0] = 0
 
         transition = np.concatenate([pos_0, pos_1])
         transitions[i] = transition
-        d_rew = 10 * reward_giver.get_reward(transition) + speed_rew
+        d_rew = 10 * reward_giver.get_reward(transition)
         
         next_obs[i] = next_ob
         ob = next_ob
 
         rews[i] = d_rew
-        speed_rews[i] = speed_rew
+        env_rews[i] = env_rew
 
         cur_ep_ret += d_rew
-        cur_ep_speed_ret += speed_rew
+        cur_ep_env_ret += env_rew
         cur_ep_disc_ret += 10 * reward_giver.get_reward(transition) 
         cur_ep_len += 1
         if new:
             ep_rets.append(cur_ep_ret)
-            cur_ep_speed_rets.append(cur_ep_speed_ret)
+            cur_ep_env_rets.append(cur_ep_env_ret)
             cur_ep_disc_rets.append(cur_ep_disc_ret)
             ep_lens.append(cur_ep_len)
             cur_ep_ret = 0
-            cur_ep_speed_ret = 0
+            cur_ep_env_ret = 0
             cur_ep_disc_ret = 0
             cur_ep_len = 0
             ob = env.reset()
@@ -343,10 +343,14 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
             d_adam.update(allmean(g), d_stepsize)
             d_losses.append(newlosses)
 
-            if rank == 0:
-                summary_list = reward_giver.summary(transition_batch, transition_expert)
-                for summary in summary_list:
-                    writer.add_summary(summary, iters_so_far)
+        if rank == 0:
+            transition_batch = replay_buffer['transitions'][-1] #(timesteps_per_batch, 2*9)
+            transition_expert = expert_dataset.get_next_batch(len(transition_batch)) #(N,2*9)
+            transition_batch = transition_batch.reshape([-1,obs_len_per_node,pos_len]).transpose(0,2,1)
+            transition_expert = transition_expert.reshape([-1,obs_len_per_node,pos_len]).transpose(0,2,1)
+            summary_list = reward_giver.summary(transition_batch, transition_expert)
+            for summary in summary_list:
+                writer.add_summary(summary, iters_so_far)
 
 
         logger.log(fmt_row(13, np.mean(d_losses, axis=0)))
@@ -356,7 +360,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank, ckpt_dir, task_n
         #         writer.add_summary(summary, iters_so_far)
 
 
-        lrlocal = (seg["ep_lens"], seg["ep_rets"], seg["cur_ep_speed_rets"], seg["cur_ep_disc_rets"])  # local values
+        lrlocal = (seg["ep_lens"], seg["ep_rets"], seg["cur_ep_env_rets"], seg["cur_ep_disc_rets"])  # local values
         listoflrpairs = MPI.COMM_WORLD.allgather(lrlocal)  # list of tuples
 
         def flatten_lists(listoflists):

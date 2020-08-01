@@ -504,12 +504,13 @@ def main(args):
         log_dir = osp.join(checkpoint_dir, "log")
         task_name = C.motion_file.split('.')[0]
 
+        writer = None
         if MPI is None or MPI.COMM_WORLD.Get_rank() == 0:
             os.makedirs(checkpoint_dir, exist_ok=True)
             C.to_yaml(osp.join(checkpoint_dir, "config.yaml"))
             logger.configure(dir=log_dir)
             writer = tf.summary.FileWriter(osp.join(log_dir,"./graphs"), tf.get_default_graph())
-            
+
         if MPI.COMM_WORLD.Get_rank() != 0:
             logger.set_level(logger.DISABLED)
         else:

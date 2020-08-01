@@ -105,7 +105,7 @@ class GraphDiscriminator(object):
         entropy = tf.reduce_mean(logit_bernoulli_entropy(logits))
         entropy_loss = -self.entcoeff*entropy
         regular_loss = tf.nn.l2_loss(logits)
-        regular_loss = 1e-4 * tf.reduce_mean(regular_loss)
+        regular_loss = self.logits_regular_coeff * tf.reduce_mean(regular_loss)
         gradient_penalty = 1e-3 * tf.nn.l2_loss(tf.gradients(tf.log(tf.nn.sigmoid(expert_logits)), norm_expert_obs))
         reward = tf.reduce_sum(-tf.log(1-tf.nn.sigmoid(generator_logits)+1e-8))
 

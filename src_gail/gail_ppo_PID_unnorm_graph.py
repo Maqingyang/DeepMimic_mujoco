@@ -91,6 +91,7 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
         pos_0 = ob[:pos_len].copy()
         pos_1 = next_ob[:pos_len].copy()
         pos_1[0] -= pos_0[0]
+        pos_0[0] = 0
         # pos_1[0] = 0 
         # pos_0[0] = 0
 

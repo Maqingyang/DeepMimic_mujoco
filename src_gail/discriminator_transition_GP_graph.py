@@ -42,8 +42,8 @@ class GraphDiscriminator(object):
         # generator_acc = tf.reduce_mean(tf.to_float(tf.nn.sigmoid(generator_logits_list[-1]) < 0.5))
         # expert_acc = tf.reduce_mean(tf.to_float(tf.nn.sigmoid(expert_logits_list[-1]) > 0.5))
 
-        generator_acc = tf.reduce_mean(tf.to_float(generator_logits_list[-1] < 0.5))
-        expert_acc = tf.reduce_mean(tf.to_float(expert_logits_list[-1]> 0.5))
+        generator_acc = tf.reduce_mean(tf.to_float(tf.nn.sigmoid(generator_logits_list[-1]) < 0.5))
+        expert_acc = tf.reduce_mean(tf.to_float(tf.nn.sigmoid(expert_logits_list[-1])> 0.5))
         node_losses = list()
         self.reward_list = list()
         self.g_acc_list = list()
@@ -51,8 +51,8 @@ class GraphDiscriminator(object):
         for generator_logits, expert_logits in zip(generator_logits_list, expert_logits_list):            
             node_losses.append(self.build_node_loss(generator_logits, expert_logits, norm_expert_obs))
             self.reward_list.append(tf.reduce_mean(-tf.log(1-tf.nn.sigmoid(generator_logits)+1e-8), axis=0))
-            self.g_acc_list.append(tf.reduce_mean(tf.to_float(generator_logits < 0.5), axis=0))
-            self.e_acc_list.append(tf.reduce_mean(tf.to_float(expert_logits > 0.5), axis=0))
+            self.g_acc_list.append(tf.reduce_mean(tf.to_float(tf.nn.sigmoid(generator_logits) < 0.5), axis=0))
+            self.e_acc_list.append(tf.reduce_mean(tf.to_float(tf.nn.sigmoid(expert_logits) > 0.5), axis=0))
 
         node_losses = tf.add_n(node_losses)
 

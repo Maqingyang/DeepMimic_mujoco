@@ -1,3 +1,4 @@
+a_message: "remove the logits regularizatoin in graph disc"
 # io
 motion_folder: mujoco/motions
 xml_folder: mujoco/bipedal/envs/asset
@@ -33,7 +34,7 @@ is_gail: true
 expert_path: null
 adversary_hidden_size: 64
 adversary_entcoeff: 1e-3
-logits_regular_coeff: 1e-4
+logits_regular_coeff: 0
 # d_stepsize: 1e-5
 d_stepsize: 1e-4
 

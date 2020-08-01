@@ -536,7 +536,7 @@ def main(args):
 
 
         expert_dataset = Dset_transition(transitions = env.env.sample_expert_traj())
-        reward_giver = GraphDiscriminator(obs_len_per_node, C.adversary_hidden_size, adj, entcoeff=C.adversary_entcoeff)
+        reward_giver = GraphDiscriminator(obs_len_per_node, C.adversary_hidden_size, adj, entcoeff=C.adversary_entcoeff, logits_regular_coeff=C.logits_regular_coeff)
 
         rank = MPI.COMM_WORLD.Get_rank()
         if rank != 0:

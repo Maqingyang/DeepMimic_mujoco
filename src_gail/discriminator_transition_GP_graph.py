@@ -25,8 +25,9 @@ def logit_bernoulli_entropy(logits):
     return ent
 
 class GraphDiscriminator(object):
-    def __init__(self, ob_length, hidden_size, adj, total_DOF = 9, entcoeff=0.001, lr_rate=1e-3, scope="discriminator"):
+    def __init__(self, ob_length, hidden_size, adj, total_DOF = 9, entcoeff=0.001, lr_rate=1e-3, logits_regular_coeff=1e-4, scope="discriminator"):
         self.entcoeff = entcoeff
+        self.logits_regular_coeff = logits_regular_coeff
         self.scope = scope
         self.ob_length = ob_length
         self.node_num = adj.shape[0] if isinstance(adj, np.ndarray) else tf.shape(adj)[0]

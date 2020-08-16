@@ -171,6 +171,7 @@ class GraphDiscriminator(object):
         sess = tf.get_default_session()
         if len(obs.shape) == 1:
             obs = obs.reshape(1,2,9).transpose(0,2,1)
+            obs = obs.reshape(1, 18)
         feed_dict = {self.generator_obs_ph: obs}
         reward = sess.run(self.reward_op, feed_dict)
         return reward
